@@ -35,7 +35,9 @@ public class ObsConfiguration
 
     private boolean disableDnsBucket;
     
-    private String defaultBucketLocation; /*桶的默认区域 */
+    private String defaultBucketLocation; /*桶的区域 */
+    
+    private String signatString;/*鉴权方式*/
 
     /**默认构造函数
      */
@@ -50,8 +52,28 @@ public class ObsConfiguration
         this.httpsOnly = true;
         this.disableDnsBucket = true;
         this.defaultBucketLocation = ObsConstraint.DEFAULT_BUCKET_LOCATION_VALUE;
+        this.signatString = ObsConstraint.DEFAULT_BUCKET_LOCATION;
     }
     
+    /**
+     * 获取登陆鉴权的方式
+     * @return 鉴权的方式
+     */
+    public String getSignatString()
+    {
+        return signatString;
+    }
+
+    /**
+     * 获取登陆鉴权的方式
+     * disableDns 鉴权方式: s3或者v4
+     * @return 
+     */
+    public void setSignatString(String signatString)
+    {
+        this.signatString = signatString;
+    }
+
     /**获取是否把桶名加入DNS域名标志
      * 
      * @return 返回是否把桶名加入DNS域名标志
@@ -223,7 +245,7 @@ public class ObsConfiguration
         return defaultBucketLocation;
     }
 
-    /**设置桶的默认区域
+    /**设置桶的区域
      * 
      * @param defaultBucketLocation 桶的默认区域（默认：CHINA）
      */

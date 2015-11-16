@@ -42,11 +42,14 @@ import org.jets3t.service.model.S3LifecycleConfiguration;
 import org.jets3t.service.model.S3ListPartsRequest;
 import org.jets3t.service.model.S3ListPartsResult;
 import org.jets3t.service.model.S3MultipartUpload;
+import org.jets3t.service.model.S3OptionInfoRequest;
+import org.jets3t.service.model.S3OptionInfoResult;
 import org.jets3t.service.model.S3Owner;
 import org.jets3t.service.model.S3Quota;
 import org.jets3t.service.model.S3StorageInfo;
 import org.jets3t.service.model.S3WebsiteConfiguration;
 import org.jets3t.service.model.SS3Bucket;
+import org.jets3t.service.model.SS3BucketCors;
 import org.jets3t.service.model.SS3Object;
 import org.jets3t.service.model.StorageObject;
 import org.jets3t.service.model.container.ObjectKeyAndVersion;
@@ -70,6 +73,7 @@ import com.huawei.obs.services.model.CopyPartResult;
 import com.huawei.obs.services.model.DeleteObjectsRequest;
 import com.huawei.obs.services.model.DeleteObjectsResult;
 import com.huawei.obs.services.model.GetObjectRequest;
+import com.huawei.obs.services.model.HttpMethodEnum;
 import com.huawei.obs.services.model.InitiateMultipartUploadRequest;
 import com.huawei.obs.services.model.InitiateMultipartUploadResult;
 import com.huawei.obs.services.model.KeyAndVersion;
@@ -83,11 +87,15 @@ import com.huawei.obs.services.model.Multipart;
 import com.huawei.obs.services.model.MultipartUploadListing;
 import com.huawei.obs.services.model.ObjectListing;
 import com.huawei.obs.services.model.ObjectMetadata;
+import com.huawei.obs.services.model.OptionsInfoRequest;
+import com.huawei.obs.services.model.OptionsInfoResult;
 import com.huawei.obs.services.model.PartEtag;
 import com.huawei.obs.services.model.PutObjectRequest;
 import com.huawei.obs.services.model.PutObjectResult;
 import com.huawei.obs.services.model.S3Bucket;
+import com.huawei.obs.services.model.S3BucketCors;
 import com.huawei.obs.services.model.S3Object;
+import com.huawei.obs.services.model.SpecialParamEnum;
 import com.huawei.obs.services.model.UploadPartRequest;
 import com.huawei.obs.services.model.UploadPartResult;
 import com.huawei.obs.services.model.WebsiteConfiguration;
@@ -100,11 +108,13 @@ import com.huawei.obs.services.model.WebsiteConfiguration;
 public class ObsClient
 {
     private RestS3Service s3Service = null;
-
+    
     private static final Logger ilog = Logger.getLogger(ObsClient.class);
-
+    
     private static final RunningLog runningLog = RunningLog.getRunningLog();
-
+    
+    private ObsConfiguration config = null;
+    
     /**
      * 指定配置参数的构造函数
      * 
@@ -114,23 +124,23 @@ public class ObsClient
      * @throws ObsException
      */
     public ObsClient(String accessId, String accessKey, ObsConfiguration config)
-            throws ObsException
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("ObsClient",
-                config.getEndPoint(), "");
-
-        ProviderCredentials credentials = new AWSCredentials(accessId,
-                accessKey);
+        InterfaceLogBean reqBean = new InterfaceLogBean("ObsClient", config.getEndPoint(), "");
+        
+        this.config = config;
+        ProviderCredentials credentials = new AWSCredentials(accessId, accessKey);
+        credentials.setSignat(config.getSignatString());
+        credentials.setRegion(config.getDefaultBucketLocation());
+        
         Jets3tProperties jets3tProperties = new Jets3tProperties();
         configfieldToProperties(config, jets3tProperties);
         try
         {
-            runningLog.debug("ObsClient", "accessId:" + accessId
-                    + ", endPoint:" + config.getEndPoint()
-                    + ", MaxConnections:" + config.getMaxConnections());
-            s3Service = new RestS3Service(credentials, null, null,
-                    jets3tProperties);
-
+            runningLog.debug("ObsClient", "accessId:" + accessId + ", endPoint:" + config.getEndPoint()
+                + ", MaxConnections:" + config.getMaxConnections());
+            s3Service = new RestS3Service(credentials, null, null, jets3tProperties);
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -140,11 +150,121 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("ObsClient", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("ObsClient",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
+    /**
+     * 创建临时授权
+     * 
+     * @param method
+     *            Http请求方式
+     * @param bucketName
+     *            桶名
+     * @param objectKey
+     *            对象名
+     * @param specialParam
+     *            特殊请求参数
+     * @param expiryTime
+     *            临时授权的有效时间
+     * @return 临时授权URL
+     * @throws ObsException SDK自定义异常（表示SDK或服务器不能正常处理业务时返回的信息。包括对应请求的描述信息及不能正常处理的原因和错误码）
+     * @since eSDK Storage 1.5.30
+     * @sample ObsClient obsClient = null;<br/>
+     *         ObsConfiguration config = null;<br/>
+     *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
+     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
+     *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
+     *         String bucketName = "bucket"; <br/>
+     *         String objectKey = "object"; 
+     *         <p>
+     *         config = new ObsConfiguration();<br/>
+     *         config.setEndPoint(endPoint);<br/>
+     *         config.setHttpsOnly(false);<br/>
+     *         config.setEndpointHttpPort(httpPort);<br/>
+     *         config.setDisableDnsBucket(true);
+     *         <p>
+     *         //设置临时授权的有效时间<br/>
+     *         final long offsetTime = 600000L;;<br/>
+     *         Date expiryTime = new Date(System.currentTimeMillis() + offsetTime);<br/>
+     *         <p>
+     *         try<br/>
+     *         {<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp; //实例化ObsClient服务<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp; obsClient = new ObsClient(ak, sk, config);<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp; //调用ObsClient的createSignedUrl接口<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp; <B>String signedUrl = obsClient.createSignedUrl(HttpMethodEnum.GET, bucketName, objectKey, null, expiryTime);</B><br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp; System.out.println("createSignedUrl success.");<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp; System.out.println("preSignedUrl is : "+signedUrl);<br/>
+     *         }<br/>
+     *         catch (ObsException e)<br/>
+     *         {<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp; System.out.println("createSignedUrl failed. " + e.getErrorMessage() + "response code :" 
+     *              + e.getResponseCode());<br/>
+     *         }<br/>
+     */
+    @SuppressWarnings({"deprecation", "static-access"})
+    public String createSignedUrl(HttpMethodEnum method, String bucketName, String objectKey,
+        SpecialParamEnum specialParam, Date expiryTime)
+        throws ObsException
+    {
+        //         TODO
+        InterfaceLogBean reqBean = new InterfaceLogBean("createSignedUrl", s3Service.getEndpoint(), "");
+        String param = (null == specialParam ? null : specialParam.getStringCode());
+        String httpMethod = (null == method ? null : method.getStringCode());
+        
+        try
+        {
+            runningLog.debug("createSignedUrl", "HttpMethod: " + httpMethod + ", bucketName: " + bucketName
+                + ", objectKey: " + objectKey + ", specialParam: " + param + ", expiryTime: " + expiryTime);
+            ProviderCredentials credentials =
+                new AWSCredentials(s3Service.getAWSCredentials().getAccessKey(), s3Service.getAWSCredentials()
+                    .getSecretKey());
+            long secondsSinceEpoch = expiryTime.getTime() / 1000;
+            String signedUrl =
+                s3Service.createSignedUrl(httpMethod,
+                    bucketName,
+                    objectKey,
+                    param,
+                    null,
+                    credentials,
+                    secondsSinceEpoch,
+                    false,
+                    config.isHttpsOnly(),
+                    config.isDisableDnsBucket());
+            
+            if (config.isHttpsOnly())
+            {
+                signedUrl = signedUrl.replaceFirst("5443", String.valueOf(config.getEndpointHttpsPort()));
+            }
+            else
+            {
+                signedUrl = signedUrl.replaceFirst("5080", String.valueOf(config.getEndpointHttpPort()));
+            }
+            
+            signedUrl = signedUrl.replaceFirst(Constants.HW_DEFAULT_HOSTNAME, config.getEndPoint());
+            
+            runningLog.debug("createSignedUrl", "return url: " + signedUrl);
+            
+            reqBean.setRespTime(new Date());
+            reqBean.setResultCode("0");
+            ilog.info(reqBean);
+            return signedUrl;
+        }
+        catch (S3ServiceException e)
+        {
+            reqBean.setRespTime(new Date());
+            reqBean.setResultCode(e.getErrorCode());
+            ilog.error(reqBean);
+            runningLog.error("createSignedUrl",
+                "Exception:" + (null == e.getXmlMessage() ? e.getErrorMessage() : e.getXmlMessage()));
+            throw Convert.changeFromS3Exception(e);
+        }
+    }
+    
     /**
      * 创建桶 <br/>
      * 按照用户指定的桶名在默认区域创建一个新桶，默认区域为CHINA。
@@ -207,18 +327,18 @@ public class ObsClient
      *         &nbsp;&nbsp;&nbsp;&nbsp;        + ". Response Code: " + e.getResponseCode()); <br/>
      *         }<br/>
      */
-    public S3Bucket createBucket(String bucketName) throws ObsException
+    public S3Bucket createBucket(String bucketName)
+        throws ObsException
     {
-
-        InterfaceLogBean reqBean = new InterfaceLogBean("createBucket(String bucketName)",
-                s3Service.getEndpoint(), "");
+        
+        InterfaceLogBean reqBean = new InterfaceLogBean("createBucket(String bucketName)", s3Service.getEndpoint(), "");
         try
         {
-
+            
             runningLog.debug("createBucket", "bucketName: " + bucketName);
-            SS3Bucket s3Bucket = s3Service.createBucket(bucketName,null);
+            SS3Bucket s3Bucket = s3Service.createBucket(bucketName, null);
             S3Bucket obsBucket = Convert.changeFromS3Bucket(s3Bucket);
-
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -228,11 +348,12 @@ public class ObsClient
         {
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("createBucket", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("createBucket",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 创建桶 <br/>
      * 按照用户指定的桶名和指定的区域创建一个新桶。
@@ -298,17 +419,15 @@ public class ObsClient
      *         }<br/>
      * */
     public S3Bucket createBucket(String bucketName, String location)
-            throws ObsException
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("createBucket",
-                s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("createBucket", s3Service.getEndpoint(), "");
         try
         {
-            runningLog.debug("createBucket", "bucketName:" + bucketName
-                    + ",location: " + location);
+            runningLog.debug("createBucket", "bucketName:" + bucketName + ",location: " + location);
             SS3Bucket s3Bucket = s3Service.createBucket(bucketName, location);
             S3Bucket obsBucket = Convert.changeFromS3Bucket(s3Bucket);
-
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -319,7 +438,8 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("createBucket", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("createBucket",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
@@ -393,16 +513,16 @@ public class ObsClient
     public S3Bucket createBucket(S3Bucket bucket)
         throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("createBucket(S3Bucket bucket)",
-            s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("createBucket(S3Bucket bucket)", s3Service.getEndpoint(), "");
         try
         {
-            runningLog.debug("createBucket", "bucketName:" + bucket.getBucketName()
-                    + ", location: " + bucket.getLocation() + ", metadata:" + bucket.getMetadata());
+            runningLog.debug("createBucket",
+                "bucketName:" + bucket.getBucketName() + ", location: " + bucket.getLocation() + ", metadata:"
+                    + bucket.getMetadata());
             
             SS3Bucket s3Bucket = s3Service.createBucket(Convert.changeToSS3Bucket(bucket));
             S3Bucket obsBucket = Convert.changeFromS3Bucket(s3Bucket);
-
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -413,11 +533,12 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("createBucket", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("createBucket",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 删除桶，必须保证桶内不存在对象
      * <p>
@@ -454,16 +575,16 @@ public class ObsClient
      *         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ e.getResponseCode());<br/>
      *         }<br/>
      * */
-    public void deleteBucket(String bucketName) throws ObsException
+    public void deleteBucket(String bucketName)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("deleteBucket",
-                s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("deleteBucket", s3Service.getEndpoint(), "");
         try
         {
-
+            
             runningLog.debug("deleteBucket", "bucketName: " + bucketName);
             s3Service.deleteBucket(bucketName);
-
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -473,11 +594,12 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("deleteBucket", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("deleteBucket",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 获取桶列表
      * <p>
@@ -530,12 +652,12 @@ public class ObsClient
      *         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; + e.getResponseCode());<br/>
      *         }<br/>
      * */
-    public List<S3Bucket> listBuckets() throws ObsException
+    public List<S3Bucket> listBuckets()
+        throws ObsException
     {
         SS3Bucket[] bucketArray;
-
-        InterfaceLogBean reqBean = new InterfaceLogBean("listBuckets",
-                s3Service.getEndpoint(), "");
+        
+        InterfaceLogBean reqBean = new InterfaceLogBean("listBuckets", s3Service.getEndpoint(), "");
         try
         {
             runningLog.debug("listBuckets", "excute listBuckets method.");
@@ -545,7 +667,7 @@ public class ObsClient
             {
                 bucketList.add(Convert.changeFromS3Bucket(bucket));
             }
-
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -556,11 +678,12 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("listBuckets", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("listBuckets",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 查询桶是否存在
      * <p>
@@ -605,12 +728,12 @@ public class ObsClient
         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ ". ResponseCode: " + e.getResponseCode());<br/>
         }
      * */
-    public boolean headBucket(String bucketName) throws ObsException
+    public boolean headBucket(String bucketName)
+        throws ObsException
     {
         asserParameterNotNull(bucketName, "The bucketName parameter must be specified.");
         boolean isExist = false;
-        InterfaceLogBean reqBean = new InterfaceLogBean("doesBucketExist",
-                s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("doesBucketExist", s3Service.getEndpoint(), "");
         try
         {
             runningLog.debug("doesBucketExist", "bucketName: " + bucketName);
@@ -619,25 +742,25 @@ public class ObsClient
             {
                 isExist = true;
             }
-
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
         }
         catch (ServiceException e)
         {
-
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
             runningLog.error("doesBucketExist",
-                    "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
-
+        
         return isExist;
     }
-
+    
     /**
      * 获取桶ACL<br/>
      * 用户执行获取桶ACL(access control list)的操作，返回指定桶的权限控制列表信息。用户必须拥有
@@ -695,17 +818,16 @@ public class ObsClient
      *         }<br/>
      */
     public AccessControlList getBucketAcl(String bucketName)
-            throws ObsException
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("getBucketAcl",
-                s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("getBucketAcl", s3Service.getEndpoint(), "");
         try
         {
             runningLog.debug("getBucketAcl", "bucketName: " + bucketName);
-
+            
             S3AccessControlList acl = s3Service.getBucketAcl(bucketName);
             AccessControlList obsAcl = Convert.changeFromS3Acl(acl);
-
+            
             reqBean.setRespTime(new Date());
             reqBean.setSourceAddr(InterfaceLogBean.getLocalIP());
             reqBean.setResultCode("0");
@@ -717,11 +839,12 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("getBucketAcl", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("getBucketAcl",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 更改桶ACL<br/>
      * OBS支持对桶操作进行权限控制。默认情况下，只有桶的创建者才有该桶的读写权限。
@@ -792,22 +915,21 @@ public class ObsClient
         }<br/>
      */
     public void setBucketAcl(String bucketName, String cannedACL, AccessControlList acl)
-            throws ObsException
+        throws ObsException
     {
         
         S3AccessControlList s3acl = null;
-        if(null != acl)
+        if (null != acl)
         {
             s3acl = Convert.changeToS3Acl(acl);
         }
-        InterfaceLogBean reqBean =
-            new InterfaceLogBean("setBucketAcl", s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("setBucketAcl", s3Service.getEndpoint(), "");
         try
         {
-            runningLog.debug("setBucketAcl", "bucketName: "+bucketName);
+            runningLog.debug("setBucketAcl", "bucketName: " + bucketName);
             
             s3Service.putBucketAcl(bucketName, cannedACL, s3acl);
-
+            
             reqBean.setRespTime(new Date());
             reqBean.setSourceAddr(InterfaceLogBean.getLocalIP());
             reqBean.setResultCode("0");
@@ -818,12 +940,13 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("setBucketAcl", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("setBucketAcl",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
-
+        
     }
-
+    
     /**
      * 获取桶区域位置<br/>
      * 对桶拥有读权限的用户可以执行获取桶区域位置信息的操作。
@@ -860,15 +983,15 @@ public class ObsClient
      *          + e.getResponseCode());<br/>
      *         }<br/>
      */
-    public String getBucketLocation(String bucketName) throws ObsException
+    public String getBucketLocation(String bucketName)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("getBucketLocation",
-                s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("getBucketLocation", s3Service.getEndpoint(), "");
         try
         {
             runningLog.info("getBucketLocation", "bucketName: " + bucketName);
             String bucketLocation = s3Service.getBucketLocation(bucketName);
-
+            
             reqBean.setRespTime(new Date());
             reqBean.setSourceAddr(InterfaceLogBean.getLocalIP());
             reqBean.setResultCode("0");
@@ -881,11 +1004,11 @@ public class ObsClient
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
             runningLog.error("getBucketLocation",
-                    "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 获取桶存量信息，单位为B<br/>
      * 桶的拥有者可以执行获取桶存量信息的操作，获取指定桶的空间大小以及对象个数。如果没有开启桶的多版本状态，那么返回的空间大小就是桶内现存所有对象大小之和;<br/>
@@ -924,22 +1047,18 @@ public class ObsClient
      *         }<br/>
      */
     public BucketStorageInfo getBucketStorageInfo(String bucketName)
-            throws ObsException
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("getBucketStorageInfo",
-                s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("getBucketStorageInfo", s3Service.getEndpoint(), "");
         try
         {
-            runningLog.debug("getBucketStorageInfo", "bucketName: "
-                    + bucketName);
-            S3StorageInfo storageInfo = s3Service
-                    .getBucketStorageInfo(bucketName);
-
+            runningLog.debug("getBucketStorageInfo", "bucketName: " + bucketName);
+            S3StorageInfo storageInfo = s3Service.getBucketStorageInfo(bucketName);
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
-            BucketStorageInfo obsStorageInfo = Convert
-                    .changeFromS3StroageInfo(storageInfo);
+            BucketStorageInfo obsStorageInfo = Convert.changeFromS3StroageInfo(storageInfo);
             return obsStorageInfo;
         }
         catch (ServiceException e)
@@ -948,11 +1067,11 @@ public class ObsClient
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
             runningLog.error("getBucketStorageInfo",
-                    "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 获取桶配额<br/>
      * 桶的拥有者可以执行获取桶配额信息的操作。<br>
@@ -991,16 +1110,16 @@ public class ObsClient
      *          + e.getResponseCode());<br/>
      *         }<br/>
      */
-    public BucketQuota getBucketQuota(String bucketName) throws ObsException
+    public BucketQuota getBucketQuota(String bucketName)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("getBucketQuota",
-                s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("getBucketQuota", s3Service.getEndpoint(), "");
         try
         {
             runningLog.debug("getBucketQuota", "bucketName: " + bucketName);
             S3Quota quota = s3Service.getBucketQuota(bucketName);
             BucketQuota bucketQuota = Convert.changeFromS3Quota(quota);
-
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -1011,12 +1130,12 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog
-                    .error("getBucketQuota", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("getBucketQuota",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 设置桶配额<br/>
      * 只有桶的拥有者才可以修改桶配额值。<br>
@@ -1061,16 +1180,15 @@ public class ObsClient
      *         }<br/>
      */
     public void setBucketQuota(String bucketName, BucketQuota bucketQuota)
-            throws ObsException
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("setBucketQuota",
-                s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("setBucketQuota", s3Service.getEndpoint(), "");
         try
         {
             runningLog.debug("setBucketQuota", "bucketName: " + bucketName);
             S3Quota quota = Convert.changeToS3Quota(bucketQuota);
             s3Service.putBucketQuota(bucketName, quota);
-
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -1080,97 +1198,442 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog
-                    .error("setBucketQuota", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("setBucketQuota",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
-//    /**
-//     * 获取桶复制策略<br/>
-//     * 桶的拥有者可以执行查询桶的复制策略操作，OBS系统将返回桶的复制策略名。<br/>
-//     * 复制策略是指在MDC版本下，对象可以通过一个复制策略方案来决定本地对象被异步上传至哪几个远程数据中心上。<br/>
-//     * <p>
-//     * <b>注意：</b>
-//     * </p>
-//     * 当且仅当在MDC(Multiple Data Center)场景下，OBS支持用户查询桶复制策略，而在单DC或 region 场景下均不支持。
-//     * 
-//     * @param bucketName 桶名
-//     * @return 桶的复制策略信息
-//     * @throws ObsException ObsException
-//     * @since eSDK Storage 1.5.10
-//     */
-//    public StoragePolicy getBucketStoragePolicy(String bucketName)
-//            throws ObsException
-//    {
-//        InterfaceLogBean reqBean = new InterfaceLogBean(
-//                "getBucketStoragePolicy", s3Service.getEndpoint(), "");
-//        try
-//        {
-//            runningLog.debug("getBucketStoragePolicy", "bucketName: "
-//                    + bucketName);
-//            S3StoragePolicy storagePolicy = s3Service
-//                    .getBucketStoragePolicy(bucketName);
-//            StoragePolicy obsStoragePolicy = Convert
-//                    .changeFromS3StoragePolicy(storagePolicy);
-//
-//            reqBean.setRespTime(new Date());
-//            reqBean.setResultCode("0");
-//            ilog.info(reqBean);
-//            return obsStoragePolicy;
-//        }
-//        catch (ServiceException e)
-//        {
-//            reqBean.setRespTime(new Date());
-//            reqBean.setResultCode(e.getErrorCode());
-//            ilog.error(reqBean);
-//            runningLog.error("getBucketStoragePolicy",
-//                    "Exception:" + (null == e.getXmlMessage() ? e.getErrorMessage() : e.getXmlMessage()));
-//            throw Convert.changeFromS3Exception(e);
-//        }
-//    }
-
-//    /**
-//     * 更改桶复制策略<br/>
-//     * 当且仅当在MDC场景下，OBS系统支持用户对桶设定复制策略，而在单DC或 region 场景下均不支持。<br/>
-//     * 复制策略是指在MDC版本下，对象可以通过一个复制策略方案来决定本地对象被异步上传至哪几个远程数据中心上。<br/>
-//     * 对象的复制策略与对象所在的桶将保持一致，因此用户无需也无法设置对象的复制策略。<br/>
-//     * 该功能的目的旨在提高多数据中心之间的异步复制过程的可靠性与性能。
-//     * 
-//     * @param bucketName 桶名
-//     * @param storagePolicy 存储策略
-//     * @throws ObsException ObsException
-//     * @since eSDK Storage 1.5.10
-//     */
-//    public void setBucketStoragePolicy(String bucketName,
-//            StoragePolicy storagePolicy) throws ObsException
-//    {
-//        InterfaceLogBean reqBean = new InterfaceLogBean(
-//                "setBucketStoragePolicy", s3Service.getEndpoint(), "");
-//        try
-//        {
-//            runningLog.debug("setBucketStoragePolicy",
-//                    "bucketName: " + bucketName + ", storagePolicy: "
-//                            + storagePolicy.getStoragePolicyName());
-//            S3StoragePolicy s3storagePolicy = Convert
-//                    .changeToS3StoragePolicy(storagePolicy);
-//            s3Service.putBucketStoragePolicy(bucketName, s3storagePolicy);
-//
-//            reqBean.setRespTime(new Date());
-//            reqBean.setResultCode("0");
-//            ilog.info(reqBean);
-//        }
-//        catch (ServiceException e)
-//        {
-//            reqBean.setRespTime(new Date());
-//            reqBean.setResultCode(e.getErrorCode());
-//            ilog.error(reqBean);
-//            runningLog.error("setBucketStoragePolicy",
-//                    "Exception:" + (null == e.getXmlMessage() ? e.getErrorMessage() : e.getXmlMessage()));
-//            throw Convert.changeFromS3Exception(e);
-//        }
-//    }
-
+    
+    /**
+     * 设置桶的CORS配置<br/>
+     * 只有桶的拥有者或者拥有s3:PutBucketCORS权限才可设置。<br>
+     * 
+     * @param bucketName 桶名
+     * @param s3BucketCors CORS信息
+     * @throws ObsException SDK自定义异常（表示SDK或服务器不能正常处理业务时返回的信息。包括对应请求的描述信息及不能正常处理的原因和错误码）
+     * @since eSDK Storage 1.5.10
+     * @sample ObsClient obsClient = null;<br/>
+     *         ObsConfiguration config = null;<br/>
+     *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
+     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
+     *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
+     *         String bucketName = "testbucket001"; 
+     *         <p>
+     *         config = new ObsConfiguration();<br/>
+     *         config.setEndPoint(endPoint);<br/>
+     *         config.setHttpsOnly(false);<br/>
+     *         config.setEndpointHttpPort(httpPort);<br/>
+     *         config.setDisableDnsBucket(true);
+     *         <p>
+     *         S3BucketCors s3BucketCors = new S3BucketCors();<br/>
+     *  
+     *         try<br/>
+     *         {
+     *            &nbsp;&nbsp;&nbsp;&nbsp;//实例化ObsClient服务<br/>
+     *            &nbsp;&nbsp;&nbsp;&nbsp;obsClient = new ObsClient(ak, sk, config);<br/>
+     *            
+     *            
+     *            &nbsp;&nbsp;&nbsp;&nbsp;// 定义CORS规则<br/>
+     *            &nbsp;&nbsp;&nbsp;&nbsp;List&ltBucketCorsRule&gt rules = new ArrayList&ltBucketCorsRule&gt();<br/>
+     *             
+     *            &nbsp;&nbsp;&nbsp;&nbsp;List&ltString&gt allowedHeader = new ArrayList&ltString&gt();<br/>
+     *            &nbsp;&nbsp;&nbsp;&nbsp;allowedHeader.add("allowedHeader");<br/>
+     *            &nbsp;&nbsp;&nbsp;&nbsp;List&ltString&gt allowedMethod = new ArrayList&ltString&gt();<br/>
+     *            &nbsp;&nbsp;&nbsp;&nbsp;allowedMethod.add("GET");<br/>
+     *            &nbsp;&nbsp;&nbsp;&nbsp;List&ltString&gt allowedOrigin = new ArrayList&ltString&gt();<br/>
+     *            &nbsp;&nbsp;&nbsp;&nbsp;allowedOrigin.add("allowedOrigin");<br/>
+     *            &nbsp;&nbsp;&nbsp;&nbsp;List&ltString&gt exposeHeader = new ArrayList&ltString&gt();<br/>
+     *            &nbsp;&nbsp;&nbsp;&nbsp;exposeHeader.add("exposeHeader");<br/>
+     *            
+     *            &nbsp;&nbsp;&nbsp;&nbsp;BucketCorsRule rule = new BucketCorsRule();<br/>
+     *            &nbsp;&nbsp;&nbsp;&nbsp;rule.setAllowedHeader(allowedHeader);<br/>
+     *            &nbsp;&nbsp;&nbsp;&nbsp;rule.setAllowedMethod(allowedMethod);<br/>
+     *            &nbsp;&nbsp;&nbsp;&nbsp;rule.setAllowedOrigin(allowedOrigin);<br/>
+     *            &nbsp;&nbsp;&nbsp;&nbsp;rule.setId("001");<br/>
+     *            &nbsp;&nbsp;&nbsp;&nbsp;rule.setExposeHeader(exposeHeader);<br/>
+     *            
+     *            &nbsp;&nbsp;&nbsp;&nbsp;rules.add(rule);<br/>
+     *            
+     *            &nbsp;&nbsp;&nbsp;&nbsp;s3BucketCors.setRules(rules);<br/>
+     *            
+     *            &nbsp;&nbsp;&nbsp;&nbsp;// 调用setBucketCors接口设置CORS规则<br/>
+     *            &nbsp;&nbsp;&nbsp;&nbsp;obsClient.setBucketCors(bucketName, s3BucketCors);<br/>
+     *        }<br/>
+     *        catch (ObsException e)<br/>
+     *        {<br/>
+     *            &nbsp;&nbsp;&nbsp;&nbsp;System.out.println("set bucket Cors failed. " + e.getErrorMessage() + " response code :"      + e.getResponseCode());<br/>
+     *        }<br/>
+     */
+    public void setBucketCors(String bucketName, S3BucketCors s3BucketCors)
+        throws ObsException
+    {
+        InterfaceLogBean reqBean = new InterfaceLogBean("setBucketCors", s3Service.getEndpoint(), "");
+        try
+        {
+            runningLog.debug("setBucketCors", "bucketName: " + bucketName);
+            
+            SS3BucketCors ss3corsBucketCors = Convert.changeToSS3BucketCors(s3BucketCors);
+            s3Service.putBucketCors(bucketName, ss3corsBucketCors);
+            
+            reqBean.setRespTime(new Date());
+            reqBean.setResultCode("0");
+            ilog.info(reqBean);
+        }
+        catch (ServiceException e)
+        {
+            reqBean.setRespTime(new Date());
+            reqBean.setResultCode(e.getErrorCode());
+            ilog.error(reqBean);
+            runningLog.error("setBucketCors",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            throw Convert.changeFromS3Exception(e);
+        }
+    }
+    
+    /**
+     * 获取桶的CORS配置<br/>
+     * 只有桶的拥有者或者拥有s3:PutBucketCORS权限才可设置。<br>
+     * 
+     * @param bucketName 桶名
+     * @return BucketCorsRule 桶的CORS配置信息 
+     * @throws ObsException SDK自定义异常（表示SDK或服务器不能正常处理业务时返回的信息。包括对应请求的描述信息及不能正常处理的原因和错误码）
+     * @since eSDK Storage 1.5.10
+     * @sample ObsClient obsClient = null;<br/>
+     *         ObsConfiguration config = null;<br/>
+     *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
+     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
+     *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
+     *         String bucketName = "testbucket001"; 
+     *         <p>
+     *         config = new ObsConfiguration();<br/>
+     *         config.setEndPoint(endPoint);<br/>
+     *         config.setHttpsOnly(false);<br/>
+     *         config.setEndpointHttpPort(httpPort);<br/>
+     *         config.setDisableDnsBucket(true);
+     *         <p>
+     *         <p>
+     *         try<br/>
+     *         {<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  //实例化ObsClient服务<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  obsClient = new ObsClient(ak, sk, config);<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  //调用ObsClient的getBucketCors接口<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  <B>obsClient.getBucketCors(bucketName);</B><br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  System.out.println("get bucket Cors success.");<br/>
+     *         }<br/>
+     *         catch (ObsException e)<br/>
+     *         {<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  System.out.println("get bucket Cors failed. " + e.getErrorMessage() + " response code :"
+     *         &nbsp;&nbsp;&nbsp;&nbsp; + e.getResponseCode());<br/>
+     *         }<br/>
+     */
+    
+    public S3BucketCors getBucketCors(String bucketName)
+        throws ObsException
+    {
+        InterfaceLogBean reqBean = new InterfaceLogBean("getBucketCors", s3Service.getEndpoint(), "");
+        S3BucketCors cors = null;
+        try
+        {
+            runningLog.debug("getBucketCors", "bucketName: " + bucketName);
+            
+            SS3BucketCors s3cors = s3Service.getBucketCors(bucketName);
+            cors = Convert.changFromSS3BucketCors(s3cors);
+            
+            reqBean.setRespTime(new Date());
+            reqBean.setResultCode("0");
+            ilog.info(reqBean);
+        }
+        catch (ServiceException e)
+        {
+            reqBean.setRespTime(new Date());
+            reqBean.setResultCode(e.getErrorCode());
+            ilog.error(reqBean);
+            runningLog.error("getBucketCors",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            throw Convert.changeFromS3Exception(e);
+        }
+        return cors;
+        
+    }
+    
+    /**
+     * 删除桶的CORS配置<br/>
+     * 只有桶的拥有者或者拥有s3:PutBucketCORS权限才可设置。<br>
+     * 
+     * @param bucketName 桶名
+     * @throws ObsException SDK自定义异常（表示SDK或服务器不能正常处理业务时返回的信息。包括对应请求的描述信息及不能正常处理的原因和错误码）
+     * @since eSDK Storage 1.5.10
+     * @sample ObsClient obsClient = null;<br/>
+     *         ObsConfiguration config = null;<br/>
+     *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
+     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
+     *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
+     *         String bucketName = "testbucket001"; 
+     *         <p>
+     *         config = new ObsConfiguration();<br/>
+     *         config.setEndPoint(endPoint);<br/>
+     *         config.setHttpsOnly(false);<br/>
+     *         config.setEndpointHttpPort(httpPort);<br/>
+     *         config.setDisableDnsBucket(true);
+     *         try<br/>
+     *         {<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  //实例化ObsClient服务<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  obsClient = new ObsClient(ak, sk, config);<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  //调用ObsClient的getBucketCors接口<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  <B>obsClient.deleteBucketCors(bucketName);</B><br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  System.out.println("delete bucket Cors success.");<br/>
+     *         }<br/>
+     *         catch (ObsException e)<br/>
+     *         {<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  System.out.println("delete bucket Cors failed. " + e.getErrorMessage() + " response code :"
+     *         &nbsp;&nbsp;&nbsp;&nbsp; + e.getResponseCode());<br/>
+     *         }<br/>
+     */
+    
+    public void deleteBucketCors(String bucketName)
+        throws ObsException
+    {
+        InterfaceLogBean reqBean = new InterfaceLogBean("deleteBucketCors", s3Service.getEndpoint(), "");
+        try
+        {
+            runningLog.debug("deleteBucketCors", "bucketName: " + bucketName);
+            
+            s3Service.deleteBucketCors(bucketName);
+            
+            reqBean.setRespTime(new Date());
+            reqBean.setResultCode("0");
+            ilog.info(reqBean);
+        }
+        catch (ServiceException e)
+        {
+            reqBean.setRespTime(new Date());
+            reqBean.setResultCode(e.getErrorCode());
+            ilog.error(reqBean);
+            runningLog.error("deleteBucketCors",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            throw Convert.changeFromS3Exception(e);
+        }
+    }
+    
+    /**
+     * 设置桶的OPTIONS<br/>
+     * 要处理OPTIONS，OBS的桶必须已经配置CORS。<br>
+     * 
+     * @param bucketName 桶名
+     * @param optionInfo Options配置信息
+     * @return OptionsInfoResult 配置option返回结果
+     * @throws ObsException SDK自定义异常（表示SDK或服务器不能正常处理业务时返回的信息。包括对应请求的描述信息及不能正常处理的原因和错误码）
+     * @since eSDK Storage 1.5.10
+     * @sample ObsClient obsClient = null;<br/>
+     *         ObsConfiguration config = null;<br/>
+     *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
+     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
+     *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
+     *         String bucketName = "testbucket001"; 
+     *         <p>
+     *         config = new ObsConfiguration();<br/>
+     *         config.setEndPoint(endPoint);<br/>
+     *         config.setHttpsOnly(false);<br/>
+     *         config.setEndpointHttpPort(httpPort);<br/>
+     *         config.setDisableDnsBucket(true);
+     *         try<br/>
+     *         {<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  //实例化ObsClient服务<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  obsClient = new ObsClient(ak, sk, config);<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  //调用ObsClient的OptionBucket接口<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  <B>obsClient.optionBucket(bucketName);</B><br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  System.out.println("option bucket success.");<br/>
+     *         }<br/>
+     *         catch (ObsException e)<br/>
+     *         {<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  System.out.println("option bucket failed. " + e.getErrorMessage() + " response code :"
+     *         &nbsp;&nbsp;&nbsp;&nbsp; + e.getResponseCode());<br/>
+     *         }<br/>
+     */
+    public OptionsInfoResult optionBucket(String bucketName, OptionsInfoRequest optionInfo)
+        throws ObsException
+    {
+        InterfaceLogBean reqBean = new InterfaceLogBean("OptionBucket", s3Service.getEndpoint(), "");
+        OptionsInfoResult output = null;
+        try
+        {
+            runningLog.debug("OptionBucket", "bucketName: " + bucketName);
+            
+            S3OptionInfoRequest s3option = Convert.changeToS3Options(optionInfo);
+            S3OptionInfoResult s3output = s3Service.optionBucket(bucketName, s3option);
+            output = Convert.changeFromSS3Options(s3output);
+            
+            reqBean.setRespTime(new Date());
+            reqBean.setResultCode("0");
+            ilog.info(reqBean);
+        }
+        catch (ServiceException e)
+        {
+            reqBean.setRespTime(new Date());
+            reqBean.setResultCode(e.getErrorCode());
+            ilog.error(reqBean);
+            runningLog.error("OptionBucket",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            throw Convert.changeFromS3Exception(e);
+        }
+        return output;
+    }
+    
+    /**
+     * 设置对象的OPTIONS<br/>
+     * 要处理OPTIONS，OBS的桶必须已经配置CORS。<br>
+     * 
+     * @param bucketName 桶名
+     * @param objectKey 对象名
+     * @param optionInfo Options配置信息
+     * @return OptionsInfoResult 配置option返回结果
+     * @throws ObsException SDK自定义异常（表示SDK或服务器不能正常处理业务时返回的信息。包括对应请求的描述信息及不能正常处理的原因和错误码）
+     * @since eSDK Storage 1.5.10
+     * @sample ObsClient obsClient = null;<br/>
+     *         ObsConfiguration config = null;<br/>
+     *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
+     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
+     *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
+     *         String bucketName = "testbucket001"; 
+     *         <p>
+     *         config = new ObsConfiguration();<br/>
+     *         config.setEndPoint(endPoint);<br/>
+     *         config.setHttpsOnly(false);<br/>
+     *         config.setEndpointHttpPort(httpPort);<br/>
+     *         config.setDisableDnsBucket(true);
+     *         try<br/>
+     *         {<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  //实例化ObsClient服务<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  obsClient = new ObsClient(ak, sk, config);<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  //调用ObsClient的OptionObject接口<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  <B>obsClient.optionObject(bucketName,objectKey,optionInfo);</B><br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  System.out.println("option object success.");<br/>
+     *         }<br/>
+     *         catch (ObsException e)<br/>
+     *         {<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  System.out.println("option object failed. " + e.getErrorMessage() + " response code :"
+     *         &nbsp;&nbsp;&nbsp;&nbsp; + e.getResponseCode());<br/>
+     *         }<br/>
+     */
+    public OptionsInfoResult optionObject(String bucketName, String objectKey, OptionsInfoRequest optionInfo)
+        throws ObsException
+    {
+        InterfaceLogBean reqBean = new InterfaceLogBean("OptionObject", s3Service.getEndpoint(), "");
+        OptionsInfoResult output = null;
+        try
+        {
+            runningLog.debug("OptionObject", "bucketName: " + bucketName);
+            
+            S3OptionInfoRequest s3option = Convert.changeToS3Options(optionInfo);
+            S3OptionInfoResult s3output = s3Service.optionObject(bucketName, objectKey, s3option);
+            output = Convert.changeFromSS3Options(s3output);
+            
+            reqBean.setRespTime(new Date());
+            reqBean.setResultCode("0");
+            ilog.info(reqBean);
+        }
+        catch (ServiceException e)
+        {
+            reqBean.setRespTime(new Date());
+            reqBean.setResultCode(e.getErrorCode());
+            ilog.error(reqBean);
+            runningLog.error("OptionObject",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            throw Convert.changeFromS3Exception(e);
+        }
+        return output;
+    }
+    
+    //    /**
+    //     * 获取桶复制策略<br/>
+    //     * 桶的拥有者可以执行查询桶的复制策略操作，OBS系统将返回桶的Cors信息。<br/>
+    //     * 复制策略是指在MDC版本下，对象可以通过一个复制策略方案来决定本地对象被异步上传至哪几个远程数据中心上。<br/>
+    //     * <p>
+    //     * <b>注意：</b>
+    //     * </p>
+    //     * 当且仅当在MDC(Multiple Data Center)场景下，OBS支持用户查询桶复制策略，而在单DC或 region 场景下均不支持。
+    //     * 
+    //     * @param bucketName 桶名
+    //     * @return 桶的复制策略信息
+    //     * @throws ObsException ObsException
+    //     * @since eSDK Storage 1.5.10
+    //     */
+    //    public StoragePolicy getBucketStoragePolicy(String bucketName)
+    //            throws ObsException
+    //    {
+    //        InterfaceLogBean reqBean = new InterfaceLogBean(
+    //                "getBucketStoragePolicy", s3Service.getEndpoint(), "");
+    //        try
+    //        {
+    //            runningLog.debug("getBucketStoragePolicy", "bucketName: "
+    //                    + bucketName);
+    //            S3StoragePolicy storagePolicy = s3Service
+    //                    .getBucketStoragePolicy(bucketName);
+    //            StoragePolicy obsStoragePolicy = Convert
+    //                    .changeFromS3StoragePolicy(storagePolicy);
+    //
+    //            reqBean.setRespTime(new Date());
+    //            reqBean.setResultCode("0");
+    //            ilog.info(reqBean);
+    //            return obsStoragePolicy;
+    //        }
+    //        catch (ServiceException e)
+    //        {
+    //            reqBean.setRespTime(new Date());
+    //            reqBean.setResultCode(e.getErrorCode());
+    //            ilog.error(reqBean);
+    //            runningLog.error("getBucketStoragePolicy",
+    //                    "Exception:" + (null == e.getXmlMessage() ? e.getErrorMessage() : e.getXmlMessage()));
+    //            throw Convert.changeFromS3Exception(e);
+    //        }
+    //    }
+    
+    //    /**
+    //     * 更改桶复制策略<br/>
+    //     * 当且仅当在MDC场景下，OBS系统支持用户对桶设定复制策略，而在单DC或 region 场景下均不支持。<br/>
+    //     * 复制策略是指在MDC版本下，对象可以通过一个复制策略方案来决定本地对象被异步上传至哪几个远程数据中心上。<br/>
+    //     * 对象的复制策略与对象所在的桶将保持一致，因此用户无需也无法设置对象的复制策略。<br/>
+    //     * 该功能的目的旨在提高多数据中心之间的异步复制过程的可靠性与性能。
+    //     * 
+    //     * @param bucketName 桶名
+    //     * @param storagePolicy 存储策略
+    //     * @throws ObsException ObsException
+    //     * @since eSDK Storage 1.5.10
+    //     */
+    //    public void setBucketStoragePolicy(String bucketName,
+    //            StoragePolicy storagePolicy) throws ObsException
+    //    {
+    //        InterfaceLogBean reqBean = new InterfaceLogBean(
+    //                "setBucketStoragePolicy", s3Service.getEndpoint(), "");
+    //        try
+    //        {
+    //            runningLog.debug("setBucketStoragePolicy",
+    //                    "bucketName: " + bucketName + ", storagePolicy: "
+    //                            + storagePolicy.getStoragePolicyName());
+    //            S3StoragePolicy s3storagePolicy = Convert
+    //                    .changeToS3StoragePolicy(storagePolicy);
+    //            s3Service.putBucketStoragePolicy(bucketName, s3storagePolicy);
+    //
+    //            reqBean.setRespTime(new Date());
+    //            reqBean.setResultCode("0");
+    //            ilog.info(reqBean);
+    //        }
+    //        catch (ServiceException e)
+    //        {
+    //            reqBean.setRespTime(new Date());
+    //            reqBean.setResultCode(e.getErrorCode());
+    //            ilog.error(reqBean);
+    //            runningLog.error("setBucketStoragePolicy",
+    //                    "Exception:" + (null == e.getXmlMessage() ? e.getErrorMessage() : e.getXmlMessage()));
+    //            throw Convert.changeFromS3Exception(e);
+    //        }
+    //    }
+    
     /**
      * 获取桶的日志管理配置<br/>
      * 查询当前桶的日志管理配置情况。
@@ -1216,21 +1679,18 @@ public class ObsClient
      *              + e.getResponseCode());<br/>
      *         }<br/>
      */
-    public BucketLoggingConfiguration getBucketLoggingConfiguration(
-            String bucketName) throws ObsException
+    public BucketLoggingConfiguration getBucketLoggingConfiguration(String bucketName)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean(
-                "getBucketLoggingConfiguration", s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("getBucketLoggingConfiguration", s3Service.getEndpoint(), "");
         try
         {
-            runningLog.debug("getBucketLoggingConfiguration", "bucketName: "
-                    + bucketName);
-
-            S3BucketLoggingStatus bucketLoggingStatus = s3Service
-                    .getBucketLoggingStatus(bucketName);
-            BucketLoggingConfiguration loggingConfiguration = Convert
-                    .changeFromS3BucketLoggingStatus(bucketLoggingStatus);
-
+            runningLog.debug("getBucketLoggingConfiguration", "bucketName: " + bucketName);
+            
+            S3BucketLoggingStatus bucketLoggingStatus = s3Service.getBucketLoggingStatus(bucketName);
+            BucketLoggingConfiguration loggingConfiguration =
+                Convert.changeFromS3BucketLoggingStatus(bucketLoggingStatus);
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -1242,11 +1702,11 @@ public class ObsClient
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
             runningLog.error("getBucketLoggingConfiguration",
-                    "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 设置桶的日志管理配置<br/>
      * 提供OBS日志访问的设置功能。指定哪些用户可以查看和修改桶的日志文件。
@@ -1305,22 +1765,18 @@ public class ObsClient
      *              + e.getResponseCode());<br/>
      *         }<br/>
      */
-    public void setBucketLoggingConfiguration(String bucketName,
-            BucketLoggingConfiguration loggingConfiguration,
-            boolean updateTargetACLifRequired) throws ObsException
+    public void setBucketLoggingConfiguration(String bucketName, BucketLoggingConfiguration loggingConfiguration,
+        boolean updateTargetACLifRequired)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean(
-                "setBucketLoggingConfiguration", s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("setBucketLoggingConfiguration", s3Service.getEndpoint(), "");
         try
         {
-            runningLog.debug("setBucketLoggingConfiguration", "bucketName: "
-                    + bucketName);
-
-            S3BucketLoggingStatus status = Convert
-                    .changeToS3BucketLoggingStatus(loggingConfiguration);
-            s3Service.setBucketLoggingStatus(bucketName, status,
-                    updateTargetACLifRequired);
-
+            runningLog.debug("setBucketLoggingConfiguration", "bucketName: " + bucketName);
+            
+            S3BucketLoggingStatus status = Convert.changeToS3BucketLoggingStatus(loggingConfiguration);
+            s3Service.setBucketLoggingStatus(bucketName, status, updateTargetACLifRequired);
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -1331,11 +1787,11 @@ public class ObsClient
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
             runningLog.error("setBucketLoggingConfiguration",
-                    "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 设置桶的多版本状态<br/>
      * 用来开启或暂停桶的多版本功能。
@@ -1402,18 +1858,17 @@ public class ObsClient
                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; + e.getResponseCode());<br/>
                }<br/>
      */
-    public void setBucketVersioning(String bucketName,BucketVersioningConfiguration versioningConfiguration)
-            throws ObsException
+    public void setBucketVersioning(String bucketName, BucketVersioningConfiguration versioningConfiguration)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("setBucketVersioning",
-                s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("setBucketVersioning", s3Service.getEndpoint(), "");
         try
         {
-            runningLog.debug("setBucketVersioning", "bucketName: " + bucketName
-                    + ", status: " + versioningConfiguration.getStatus());
+            runningLog.debug("setBucketVersioning", "bucketName: " + bucketName + ", status: "
+                + versioningConfiguration.getStatus());
             
             s3Service.setBucketVersioning(bucketName, versioningConfiguration.getStatus());
-
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -1424,11 +1879,11 @@ public class ObsClient
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
             runningLog.error("setBucketVersioning",
-                    "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 获取桶的多版本状态<br/>
      * 桶的所有者可以获取指定桶的多版本状态。<br/>
@@ -1470,19 +1925,16 @@ public class ObsClient
        }
      */
     public BucketVersioningConfiguration getBucketVersioning(String bucketName)
-            throws ObsException
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("getBucketVersioning",
-                s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("getBucketVersioning", s3Service.getEndpoint(), "");
         try
         {
-            runningLog
-                    .debug("setBucketVersioning", "bucketName: " + bucketName);
-            S3BucketVersioningStatus versionStatus = s3Service
-                    .getBucketVersioningStatus(bucketName);
-            BucketVersioningConfiguration versionConfiguration
-            = new BucketVersioningConfiguration(versionStatus.getVersioningStatus());
-
+            runningLog.debug("setBucketVersioning", "bucketName: " + bucketName);
+            S3BucketVersioningStatus versionStatus = s3Service.getBucketVersioningStatus(bucketName);
+            BucketVersioningConfiguration versionConfiguration =
+                new BucketVersioningConfiguration(versionStatus.getVersioningStatus());
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -1494,11 +1946,11 @@ public class ObsClient
             reqBean.setResultCode(e.getErrorCode());
             ilog.info(reqBean);
             runningLog.error("getBucketVersioning",
-                    "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 获取桶内所有对象的版本信息<br/>
      * 对桶拥有读权限的用户可以执行列举桶内对象的版本信息（含多版本）操作。
@@ -1539,16 +1991,21 @@ public class ObsClient
                 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ ". ResponseCode: " + e.getResponseCode());<br/>
         }<br/>
      */
-    public ListVersionsResult listVersions(String bucketName, String prefix,
-            String delimiter, String keyMarker, String versionIdMarker,
-            long maxKeys,String nextVersionIdMarker) throws ObsException
+    public ListVersionsResult listVersions(String bucketName, String prefix, String delimiter, String keyMarker,
+        String versionIdMarker, long maxKeys, String nextVersionIdMarker)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("listVersions",
-                s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("listVersions", s3Service.getEndpoint(), "");
         try
         {
-            VersionOrDeleteMarkersChunk markersChunk
-            = s3Service.listVersionedObjectsChunked(bucketName, prefix, delimiter, maxKeys, keyMarker, nextVersionIdMarker, true);
+            VersionOrDeleteMarkersChunk markersChunk =
+                s3Service.listVersionedObjectsChunked(bucketName,
+                    prefix,
+                    delimiter,
+                    maxKeys,
+                    keyMarker,
+                    nextVersionIdMarker,
+                    true);
             ListVersionsResult result = Convert.changeFromS3ListVersionsResult(markersChunk);
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
@@ -1565,7 +2022,7 @@ public class ObsClient
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 获取桶的生命周期配置<br/>
      * 获取为该桶设置的生命周期配置信息（OBS系统支持通过指定规则来实现定时删除桶中对象）。
@@ -1612,23 +2069,18 @@ public class ObsClient
      *                                     + e.getResponseCode());<br/>
      *         }
      */
-    public LifecycleConfiguration getBucketLifecycleConfiguration(
-            String bucketName) throws ObsException
+    public LifecycleConfiguration getBucketLifecycleConfiguration(String bucketName)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean(
-                "getBucketLifecycleConfiguration", s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("getBucketLifecycleConfiguration", s3Service.getEndpoint(), "");
         try
         {
-            runningLog.debug("getBucketLifecycleConfiguration", "bucketName: "
-                    + bucketName);
-
-            S3LifecycleConfiguration s3LifecycleConfig = s3Service
-                    .getBucketLifecycleConfiguration(bucketName);
-            LifecycleConfiguration lifecycleConfig = Convert
-                    .changeFromS3LifecycleConfiguration(s3LifecycleConfig);
-
-            runningLog.debug("getBucketLifecycleConfiguration",
-                    "LifecycleConfiguration: " + lifecycleConfig);
+            runningLog.debug("getBucketLifecycleConfiguration", "bucketName: " + bucketName);
+            
+            S3LifecycleConfiguration s3LifecycleConfig = s3Service.getBucketLifecycleConfiguration(bucketName);
+            LifecycleConfiguration lifecycleConfig = Convert.changeFromS3LifecycleConfiguration(s3LifecycleConfig);
+            
+            runningLog.debug("getBucketLifecycleConfiguration", "LifecycleConfiguration: " + lifecycleConfig);
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -1639,12 +2091,12 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("getBucketLifecycleConfiguration", "Exception:"
-                    + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("getBucketLifecycleConfiguration",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 设置桶的生命周期配置<br/>
      * 为桶创建或更新生命周期配置信息（OBS系统支持通过指定规则来实现定时删除桶中对象）。
@@ -1710,21 +2162,17 @@ public class ObsClient
      *                                     + e.getResponseCode());<br/>
      *         }
      */
-    public void setBucketLifecycleConfiguration(String bucketName,
-            LifecycleConfiguration lifecycleConfig) throws ObsException
+    public void setBucketLifecycleConfiguration(String bucketName, LifecycleConfiguration lifecycleConfig)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean(
-                "setBucketLifecycleConfiguration", s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("setBucketLifecycleConfiguration", s3Service.getEndpoint(), "");
         try
         {
-            runningLog.debug("setBucketLifecycleConfiguration", "bucketName: "
-                    + bucketName + ", LifecycleConfiguration: "
-                    + lifecycleConfig);
-
-            S3LifecycleConfiguration s3LifecycleConfig = Convert
-                    .changeToS3LifecycleConfiguration(lifecycleConfig);
-            s3Service.setBucketLifecycleConfiguration(bucketName,
-                    s3LifecycleConfig);
+            runningLog.debug("setBucketLifecycleConfiguration", "bucketName: " + bucketName
+                + ", LifecycleConfiguration: " + lifecycleConfig);
+            
+            S3LifecycleConfiguration s3LifecycleConfig = Convert.changeToS3LifecycleConfiguration(lifecycleConfig);
+            s3Service.setBucketLifecycleConfiguration(bucketName, s3LifecycleConfig);
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -1734,12 +2182,12 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("setBucketLifecycleConfiguration", "Exception:"
-                    + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("setBucketLifecycleConfiguration",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 删除桶的生命周期配置<br/>
      * 删除指定桶的生命周期配置信息。删除后桶中的对象不会过期，OBS不会自动删除桶中对象。
@@ -1779,15 +2227,13 @@ public class ObsClient
      *         }<br/>
      */
     public void deleteBucketLifecycleConfiguration(String bucketName)
-            throws ObsException
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean(
-                "deleteBucketLifecycleConfiguration", s3Service.getEndpoint(),
-                "");
+        InterfaceLogBean reqBean =
+            new InterfaceLogBean("deleteBucketLifecycleConfiguration", s3Service.getEndpoint(), "");
         try
         {
-            runningLog.debug("deleteBucketLifecycleConfiguration",
-                    "bucketName: " + bucketName);
+            runningLog.debug("deleteBucketLifecycleConfiguration", "bucketName: " + bucketName);
             s3Service.deleteBucketLifecycleConfiguration(bucketName);
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
@@ -1798,12 +2244,12 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("deleteBucketLifecycleConfiguration", "Exception:"
-                    + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("deleteBucketLifecycleConfiguration",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 获取桶策略<br/>
      * <p>
@@ -1843,16 +2289,16 @@ public class ObsClient
      *              + " response code :" + e.getResponseCode());<br/>
      *         }<br/>
      */
-    public String getBucketPolicy(String bucketName) throws ObsException
+    public String getBucketPolicy(String bucketName)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("getBucketPolicy",
-                s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("getBucketPolicy", s3Service.getEndpoint(), "");
         try
         {
             runningLog.debug("getBucketPolicy", "bucketName: " + bucketName);
             String policy = s3Service.getBucketPolicy(bucketName);
             runningLog.debug("getBucketPolicy", "policy: " + policy);
-
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -1864,11 +2310,11 @@ public class ObsClient
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
             runningLog.error("getBucketPolicy",
-                    "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 设置桶策略<br/>
      * 创建或者修改一个桶的策略。
@@ -1921,18 +2367,15 @@ public class ObsClient
      *         }<br/>
      */
     public void setBucketPolicy(String bucketName, String policy)
-            throws ObsException
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("setBucketPolicy",
-                s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("setBucketPolicy", s3Service.getEndpoint(), "");
         try
         {
-            runningLog.debug("setBucketPolicy", "bucketName: " + bucketName
-                    + "， policy: " + policy);
+            runningLog.debug("setBucketPolicy", "bucketName: " + bucketName + "， policy: " + policy);
             s3Service.setBucketPolicy(bucketName, policy);
-            runningLog.debug("setBucketPolicy", "bucketName: " + bucketName
-                    + "， policy: " + policy);
-
+            runningLog.debug("setBucketPolicy", "bucketName: " + bucketName + "， policy: " + policy);
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -1942,13 +2385,13 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-
+            
             runningLog.error("setBucketPolicy",
-                    "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 删除桶策略<br/>
      * 删除一个指定桶的策略。
@@ -1986,16 +2429,16 @@ public class ObsClient
      *          + ", response code: " + e.getResponseCode());<br/>
                }<br/>
      */
-    public void deleteBucketPolicy(String bucketName) throws ObsException
+    public void deleteBucketPolicy(String bucketName)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("deleteBucketPolicy",
-                s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("deleteBucketPolicy", s3Service.getEndpoint(), "");
         try
         {
             runningLog.debug("deleteBucketPolicy", "bucketName: " + bucketName);
             s3Service.deleteBucketPolicy(bucketName);
             runningLog.debug("deleteBucketPolicy", "bucketName: " + bucketName);
-
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -2006,11 +2449,11 @@ public class ObsClient
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
             runningLog.error("deleteBucketPolicy",
-                    "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 删除桶数据<br/>
      * 即使桶内存在对象，仍然可以执行删除桶数据操作，删除桶和桶内对象。
@@ -2051,16 +2494,16 @@ public class ObsClient
      *         &nbsp;&nbsp;&nbsp;&nbsp; System.out.println("Force delete bucket failed. " + e.getErrorMessage() + " resposne code : " + e.getResponseCode());<br/>
      *         }<br/>
      */
-    public void forceDeleteBucket(String bucketName) throws ObsException
+    public void forceDeleteBucket(String bucketName)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("forceDeleteBucket",
-                s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("forceDeleteBucket", s3Service.getEndpoint(), "");
         try
         {
             runningLog.debug("forceDeleteBucket", "bucketName: " + bucketName);
             s3Service.forceDeleteBucket(bucketName);
             runningLog.debug("forceDeleteBucket", "bucketName: " + bucketName);
-
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -2071,11 +2514,11 @@ public class ObsClient
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
             runningLog.error("forceDeleteBucket",
-                    "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 获取桶的Website配置<br/>
      * 获取该桶设置的Website配置信息。 要正确执行此操作，需要确保执行者有s3:GetBucketWebsite执行权限。
@@ -2124,20 +2567,17 @@ public class ObsClient
         }<br/>
      */
     public WebsiteConfiguration getBucketWebsiteConfiguration(String bucketName)
-            throws ObsException
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean(
-                "getBucketWebsiteConfiguration", s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("getBucketWebsiteConfiguration", s3Service.getEndpoint(), "");
         try
         {
-            runningLog.debug("getBucketWebsiteConfiguration", "bucketName: "
-                    + bucketName);
+            runningLog.debug("getBucketWebsiteConfiguration", "bucketName: " + bucketName);
             WebsiteConfiguration websiteConfig = new WebsiteConfiguration();
             
-            S3WebsiteConfiguration s3WebsiteConfig = s3Service
-                    .getWebsiteConfig(bucketName);
+            S3WebsiteConfiguration s3WebsiteConfig = s3Service.getWebsiteConfig(bucketName);
             websiteConfig = Convert.changeFromS3WebsiteConfiguration(s3WebsiteConfig);
-
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -2150,11 +2590,11 @@ public class ObsClient
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
             runningLog.error("getBucketWebsiteConfiguration",
-                    "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 设置桶的Website配置<br/>
      * 为桶创建或更新Website配置信息。
@@ -2222,18 +2662,16 @@ public class ObsClient
       &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ ". ResponseCode: " + e.getResponseCode());<br/>
       }<br/>
      */
-    public void setBucketWebsiteConfiguration(String bucketName,
-            WebsiteConfiguration websiteConfig) throws ObsException
+    public void setBucketWebsiteConfiguration(String bucketName, WebsiteConfiguration websiteConfig)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean(
-                "setBucketWebsiteConfiguration", s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("setBucketWebsiteConfiguration", s3Service.getEndpoint(), "");
         try
         {
-            runningLog.debug("setBucketWebsiteConfiguration", "bucketName: "
-                    + bucketName + ", WebsiteConfig: " + websiteConfig);
-
-            S3WebsiteConfiguration s3WebsiteConfig = Convert
-                    .changeToS3WebsiteConfiguration(websiteConfig);
+            runningLog.debug("setBucketWebsiteConfiguration", "bucketName: " + bucketName + ", WebsiteConfig: "
+                + websiteConfig);
+            
+            S3WebsiteConfiguration s3WebsiteConfig = Convert.changeToS3WebsiteConfiguration(websiteConfig);
             s3Service.setWebsiteConfig(bucketName, s3WebsiteConfig);
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
@@ -2245,11 +2683,11 @@ public class ObsClient
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
             runningLog.error("setBucketWebsite",
-                    "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 删除桶的Website配置<br/>
      * 删除指定桶的Website配置信息。
@@ -2288,15 +2726,14 @@ public class ObsClient
      *  <p>
      */
     public void deleteBucketWebsiteConfiguration(String bucketName)
-            throws ObsException
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("deleteBuketWebsite",
-                s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("deleteBuketWebsite", s3Service.getEndpoint(), "");
         try
         {
             runningLog.debug("deleteBuketWebsite", "bucketName: " + bucketName);
             s3Service.deleteWebsiteConfig(bucketName);
-
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -2307,11 +2744,11 @@ public class ObsClient
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
             runningLog.error("deleteBuketWebsite",
-                    "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 上传对象<br/>
      * 在指定的桶内增加一个对象，执行该操作需要用户拥有桶的写权限。
@@ -2375,14 +2812,13 @@ public class ObsClient
      *         &nbsp;&nbsp;&nbsp;&nbsp;  System.out.println("Put object failed. " + e.getErrorMessage() + " response code :" + e.getResponseCode());<br/>
      *         }<br/>
      */
-    public PutObjectResult putObject(String bucketName, String objectKey,
-            InputStream input, ObjectMetadata metadata) throws ObsException
+    public PutObjectResult putObject(String bucketName, String objectKey, InputStream input, ObjectMetadata metadata)
+        throws ObsException
     {
-        InterfaceLogBean reqBean =
-            new InterfaceLogBean("putObject", s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("putObject", s3Service.getEndpoint(), "");
         
-        runningLog.debug("putObject","bucketName: "
-            + bucketName + ", objectKey: " + objectKey + ", ObjectMetadata: " + metadata);
+        runningLog.debug("putObject", "bucketName: " + bucketName + ", objectKey: " + objectKey + ", ObjectMetadata: "
+            + metadata);
         SS3Object object = new SS3Object();
         object.setBucketName(bucketName);
         object.setKey(objectKey);
@@ -2390,9 +2826,9 @@ public class ObsClient
         // jetS3t会使用S3Object中contentType属性的覆盖头域中的Content-Type
         object.setContentType(metadata.getContentType());
         object.setContentLength(metadata.getContentLength());
-        if(null != metadata.getMetadata())
+        if (null != metadata.getMetadata())
         {
-            Map<String,Object> map = metadata.getMetadata();
+            Map<String, Object> map = metadata.getMetadata();
             Set<String> keys = map.keySet();
             for (String key : keys)
             {
@@ -2404,9 +2840,9 @@ public class ObsClient
             SS3Object objRet = s3Service.putObject(bucketName, object);
             PutObjectResult putObjectResult = new PutObjectResult();
             putObjectResult.setEtag(objRet.getETag());
-            runningLog.debug("putObject", "bucketName: " + bucketName
-                    + ", putObjectResult: " + putObjectResult.getEtag());
-
+            runningLog.debug("putObject",
+                "bucketName: " + bucketName + ", putObjectResult: " + putObjectResult.getEtag());
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -2417,7 +2853,8 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("putObject", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("putObject",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
@@ -2495,13 +2932,12 @@ public class ObsClient
         }<br/>
      */
     public PutObjectResult putObject(PutObjectRequest request)
-            throws ObsException
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("putObject",
-                s3Service.getEndpoint(), "");
-
-        runningLog.debug("putObject", "bucketName: " + request.getBucketName()
-                + ", objectKey: " + request.getObjectKey() + ", metadata: "
+        InterfaceLogBean reqBean = new InterfaceLogBean("putObject", s3Service.getEndpoint(), "");
+        
+        runningLog.debug("putObject",
+            "bucketName: " + request.getBucketName() + ", objectKey: " + request.getObjectKey() + ", metadata: "
                 + request.getMetadata().getContentType());
         SS3Object object = new SS3Object();
         object.setBucketName(request.getBucketName());
@@ -2510,21 +2946,16 @@ public class ObsClient
         object.setContentType(request.getMetadata().getContentType());
         object.setContentLength(request.getMetadata().getContentLength());
         object.addAllMetadata(request.getMetadata().getMetadata());
-
+        
         try
         {
-            SS3Object objRet = s3Service.putObject(request.getBucketName(),
-                    object);
+            SS3Object objRet = s3Service.putObject(request.getBucketName(), object);
             PutObjectResult putObjectResult = new PutObjectResult();
             putObjectResult.setEtag(objRet.getETag());
-
-            runningLog
-                    .debug("putObject",
-                            "SS3Object BucketName: " + objRet.getBucketName()
-                                    + ", SS3Object name: " + objRet.getName()
-                                    + ", SS3Object versionId: "
-                                    + objRet.getVersionId());
-
+            
+            runningLog.debug("putObject", "SS3Object BucketName: " + objRet.getBucketName() + ", SS3Object name: "
+                + objRet.getName() + ", SS3Object versionId: " + objRet.getVersionId());
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -2535,11 +2966,12 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("putObject", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("putObject",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 上传对象<br/>
      * 在指定的桶内增加一个对象，执行该操作需要用户拥有桶的写权限。
@@ -2596,32 +3028,26 @@ public class ObsClient
        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ ". ResponseCode: " + e.getResponseCode());<br/>
         }<br/>
      */
-    public PutObjectResult putObject(String bucketName, String objectKey,
-            File file) throws ObsException
+    public PutObjectResult putObject(String bucketName, String objectKey, File file)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("putObject",
-                s3Service.getEndpoint(), "");
-
+        InterfaceLogBean reqBean = new InterfaceLogBean("putObject", s3Service.getEndpoint(), "");
+        
         SS3Object object = new SS3Object();
         object.setBucketName(bucketName);
         object.setKey(objectKey);
         object.setDataInputFile(file);
         object.setContentLength(file.length());
-        runningLog.debug("putObject", "bucketName: " + bucketName
-                + ", objectKey: " + objectKey);
-
+        runningLog.debug("putObject", "bucketName: " + bucketName + ", objectKey: " + objectKey);
+        
         try
         {
             SS3Object objRet = s3Service.putObject(bucketName, object);
             PutObjectResult putObjectResult = new PutObjectResult();
             putObjectResult.setEtag(objRet.getETag());
-            runningLog
-                    .debug("putObject",
-                            "SS3Object BucketName: " + objRet.getBucketName()
-                                    + ", SS3Object name: " + objRet.getName()
-                                    + ", SS3Object versionId: "
-                                    + objRet.getVersionId());
-
+            runningLog.debug("putObject", "SS3Object BucketName: " + objRet.getBucketName() + ", SS3Object name: "
+                + objRet.getName() + ", SS3Object versionId: " + objRet.getVersionId());
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -2632,11 +3058,12 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("putObject", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("putObject",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 获取对象<br/>
      * 获取对象内容和对象的元数据信息。
@@ -2721,31 +3148,24 @@ public class ObsClient
      * 
      */
     public S3Object getObject(GetObjectRequest getObjectRequest)
-            throws ObsException
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("getObject",
-                s3Service.getEndpoint(), "");
-
+        InterfaceLogBean reqBean = new InterfaceLogBean("getObject", s3Service.getEndpoint(), "");
+        
         String bucketName = getObjectRequest.getBucketName();
         String objectKey = getObjectRequest.getObjectKey();
         Long rangeStart = getObjectRequest.getRangeStart();
         Long rangeEnd = getObjectRequest.getRangeEnd();
         try
         {
-            runningLog.debug("getObject", "bucketName: " + bucketName
-                    + ", objectKey: " + objectKey + ", rangeStart: "
-                    + rangeStart + ", rangeEnd: " + rangeEnd);
+            runningLog.debug("getObject", "bucketName: " + bucketName + ", objectKey: " + objectKey + ", rangeStart: "
+                + rangeStart + ", rangeEnd: " + rangeEnd);
             SS3Bucket bucket = new SS3Bucket(bucketName);
-            SS3Object object = s3Service.getObject(bucket, objectKey, null,
-                    null, null, null, rangeStart, rangeEnd);
+            SS3Object object = s3Service.getObject(bucket, objectKey, null, null, null, null, rangeStart, rangeEnd);
             S3Object obsObject = Convert.changeFromS3Object(object);
-            runningLog
-                    .debug("putObject",
-                            "SS3Object BucketName: " + object.getBucketName()
-                                    + ", SS3Object name: " + object.getName()
-                                    + ", SS3Object versionId: "
-                                    + object.getVersionId());
-
+            runningLog.debug("putObject", "SS3Object BucketName: " + object.getBucketName() + ", SS3Object name: "
+                + object.getName() + ", SS3Object versionId: " + object.getVersionId());
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -2756,11 +3176,12 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("getObject", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("getObject",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 指定桶名、对象名获取对象
      * 
@@ -2834,26 +3255,19 @@ public class ObsClient
      *         &nbsp;&nbsp;&nbsp;&nbsp;}<br/>
      *         }<br/>
      */
-    public S3Object getObject(String bucketName, String objectKey,
-            String versionId) throws ObsException
+    public S3Object getObject(String bucketName, String objectKey, String versionId)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("getObject",
-                s3Service.getEndpoint(), "");
-
+        InterfaceLogBean reqBean = new InterfaceLogBean("getObject", s3Service.getEndpoint(), "");
+        
         try
         {
-            runningLog.debug("getObject", "bucketName: " + bucketName
-                    + ", objectKey: " + objectKey);
-            SS3Object object = s3Service.getObject(bucketName, objectKey,
-                    versionId);
+            runningLog.debug("getObject", "bucketName: " + bucketName + ", objectKey: " + objectKey);
+            SS3Object object = s3Service.getObject(bucketName, objectKey, versionId);
             S3Object obsObject = Convert.changeFromS3Object(object);
-            runningLog
-                    .debug("getObject",
-                            "SS3Object BucketName: " + object.getBucketName()
-                                    + ", SS3Object name: " + object.getName()
-                                    + ", SS3Object versionId: "
-                                    + object.getVersionId());
-
+            runningLog.debug("getObject", "SS3Object BucketName: " + object.getBucketName() + ", SS3Object name: "
+                + object.getName() + ", SS3Object versionId: " + object.getVersionId());
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -2864,11 +3278,12 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("getObject", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("getObject",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 获取对象元数据<br/>
      * 获取对象的元数据信息，需要用户拥有对象的读权限。
@@ -2913,17 +3328,15 @@ public class ObsClient
                 }<br/>
      *         
      */
-    public ObjectMetadata getObjectMetadata(String bucketName,
-            String objectKey, String versionId) throws ObsException
+    public ObjectMetadata getObjectMetadata(String bucketName, String objectKey, String versionId)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("getObjectMetadata",
-                s3Service.getEndpoint(), "");
-
+        InterfaceLogBean reqBean = new InterfaceLogBean("getObjectMetadata", s3Service.getEndpoint(), "");
+        
         try
         {
-            runningLog.debug("getObjectMetadata", "bucketName: " + bucketName
-                    + ", objectKey: " + objectKey);
-            StorageObject object = s3Service.getObjectDetails(bucketName, objectKey,versionId);
+            runningLog.debug("getObjectMetadata", "bucketName: " + bucketName + ", objectKey: " + objectKey);
+            StorageObject object = s3Service.getObjectDetails(bucketName, objectKey, versionId);
             ObjectMetadata objMeta = new ObjectMetadata();
             if (object != null)
             {
@@ -2934,11 +3347,9 @@ public class ObsClient
                 objMeta.setMetadata(object.getMetadataMap());
                 objMeta.setContentEncoding(object.getContentEncoding());
             }
-            runningLog.debug("getObjectMetadata",
-                    "ContentEncoding: " + objMeta.getContentEncoding()
-                            + ", ContentLength: " + objMeta.getContentLength()
-                            + ", Etag: " + objMeta.getEtag());
-
+            runningLog.debug("getObjectMetadata", "ContentEncoding: " + objMeta.getContentEncoding()
+                + ", ContentLength: " + objMeta.getContentLength() + ", Etag: " + objMeta.getEtag());
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -2950,11 +3361,11 @@ public class ObsClient
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
             runningLog.error("getObjectMetadata",
-                    "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 列出桶内的对象列表<br/>
      * 对桶拥有读权限的用户可以执行获取桶内对象列表的操作。
@@ -3011,33 +3422,29 @@ public class ObsClient
      * 
      */
     public ObjectListing listObjects(ListObjectsRequest listObjectsRequest)
-            throws ObsException
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("listObjects",
-                s3Service.getEndpoint(), "");
-
+        InterfaceLogBean reqBean = new InterfaceLogBean("listObjects", s3Service.getEndpoint(), "");
+        
         String bucketName = listObjectsRequest.getBucketName();
         String prefix = listObjectsRequest.getPrefix();
         String delimiter = listObjectsRequest.getDelimiter();
         String marker = listObjectsRequest.getMarker();
         int maxKeys = listObjectsRequest.getMaxKeys();
-
+        
         try
         {
-            runningLog.debug("listObjects", "bucketName: " + bucketName
-                    + ", prefix: " + prefix + ", prefix: " + prefix
-                    + ", maxKeys: " + maxKeys + ", delimiter: " + delimiter
-                    + ", marker: " + marker);
-            StorageObjectsChunk obj = s3Service.listObjectsChunked(bucketName,
-                    prefix, delimiter, maxKeys, marker, false);
+            runningLog.debug("listObjects", "bucketName: " + bucketName + ", prefix: " + prefix + ", prefix: " + prefix
+                + ", maxKeys: " + maxKeys + ", delimiter: " + delimiter + ", marker: " + marker);
+            StorageObjectsChunk obj =
+                s3Service.listObjectsChunked(bucketName, prefix, delimiter, maxKeys, marker, false);
             ObjectListing objList = new ObjectListing();
             objList.setBucketName(bucketName);
             objList.setPrefix(prefix);
             objList.setDelimiter(delimiter);
             objList.setMarker(marker);
             objList.setMaxKeys(maxKeys);
-            List<String> comPrefixList = new ArrayList<String>(
-                    Arrays.asList(obj.getCommonPrefixes()));
+            List<String> comPrefixList = new ArrayList<String>(Arrays.asList(obj.getCommonPrefixes()));
             List<S3Object> objectSummaries = new ArrayList<S3Object>();
             for (StorageObject object : obj.getObjects())
             {
@@ -3045,16 +3452,11 @@ public class ObsClient
             }
             objList.setCommonPrefixes(comPrefixList);
             objList.setObjectSummaries(objectSummaries);
-            runningLog.debug(
-                    "listObjects",
-                    "S3Objects amount: " + objectSummaries.size()
-                            + "ObjectListing BucketName: "
-                            + objList.getBucketName() + ", Delimiter: "
-                            + objList.getDelimiter() + ", Prefix: "
-                            + objList.getPrefix() + ", Marker: "
-                            + objList.getMarker() + ", MaxKeys:"
-                            + objList.getMaxKeys());
-
+            runningLog.debug("listObjects",
+                "S3Objects amount: " + objectSummaries.size() + "ObjectListing BucketName: " + objList.getBucketName()
+                    + ", Delimiter: " + objList.getDelimiter() + ", Prefix: " + objList.getPrefix() + ", Marker: "
+                    + objList.getMarker() + ", MaxKeys:" + objList.getMaxKeys());
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -3065,11 +3467,12 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("listObjects", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("listObjects",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 列出桶内对象列表，默认返回最大1000个对象的信息列表
      * 
@@ -3110,21 +3513,24 @@ public class ObsClient
      *         &nbsp;&nbsp;&nbsp;&nbsp;  System.out.println("List objects failed. " + e.getErrorMessage() + " response code :" + e.getResponseCode());<br/>
      *         }<br/>
      */
-    public ObjectListing listObjects(String bucketName) throws ObsException
+    public ObjectListing listObjects(String bucketName)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("listObjects",
-                s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("listObjects", s3Service.getEndpoint(), "");
         try
         {
             runningLog.debug("listObjects", "bucketName: " + bucketName);
-            StorageObjectsChunk obj = s3Service.listObjectsChunked(bucketName,
-                    null, null, Constants.DEFAULT_OBJECT_LIST_CHUNK_SIZE, null,
+            StorageObjectsChunk obj =
+                s3Service.listObjectsChunked(bucketName,
+                    null,
+                    null,
+                    Constants.DEFAULT_OBJECT_LIST_CHUNK_SIZE,
+                    null,
                     false);
             ObjectListing objList = new ObjectListing();
             objList.setBucketName(bucketName);
-            List<String> comPrefixList = new ArrayList<String>(
-                    Arrays.asList(obj.getCommonPrefixes()));
-
+            List<String> comPrefixList = new ArrayList<String>(Arrays.asList(obj.getCommonPrefixes()));
+            
             List<S3Object> objectSummaries = new ArrayList<S3Object>();
             for (StorageObject object : obj.getObjects())
             {
@@ -3132,16 +3538,11 @@ public class ObsClient
             }
             objList.setCommonPrefixes(comPrefixList);
             objList.setObjectSummaries(objectSummaries);
-            runningLog.debug(
-                    "listObjects",
-                    "S3Objects amount: " + objectSummaries.size()
-                            + "ObjectListing BucketName: "
-                            + objList.getBucketName() + ", Delimiter: "
-                            + objList.getDelimiter() + ", Prefix: "
-                            + objList.getPrefix() + ", Marker: "
-                            + objList.getMarker() + ", MaxKeys:"
-                            + objList.getMaxKeys());
-
+            runningLog.debug("listObjects",
+                "S3Objects amount: " + objectSummaries.size() + "ObjectListing BucketName: " + objList.getBucketName()
+                    + ", Delimiter: " + objList.getDelimiter() + ", Prefix: " + objList.getPrefix() + ", Marker: "
+                    + objList.getMarker() + ", MaxKeys:" + objList.getMaxKeys());
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -3152,11 +3553,12 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("listObjects", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("listObjects",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 删除对象<br/>
      * 拥有对象所在桶的写权限的用户可以执行删除对象的操作。
@@ -3203,17 +3605,15 @@ public class ObsClient
      *           + e.getResponseCode());<br/>
      *         }<br/>
      */
-    public void deleteObject(String bucketName, String objectKey,
-            String versionId) throws ObsException
+    public void deleteObject(String bucketName, String objectKey, String versionId)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("deleteObjects",
-                s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("deleteObjects", s3Service.getEndpoint(), "");
         try
         {
-            runningLog.debug("deleteObjects", "bucketName: " + bucketName
-                    + ", objectKey: " + objectKey);
+            runningLog.debug("deleteObjects", "bucketName: " + bucketName + ", objectKey: " + objectKey);
             s3Service.deleteObject(bucketName, objectKey, versionId);
-
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -3223,11 +3623,12 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("deleteObjects", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("deleteObjects",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 批量删除对象<br/>
      * 将一个桶内的部分对象一次性删除，删除后不可恢复。
@@ -3286,31 +3687,27 @@ public class ObsClient
      *           e.getResponseCode());<br/>
      *         }<br/>
      */
-    public DeleteObjectsResult deleteObjects(
-            DeleteObjectsRequest deleteObjectsRequest) throws ObsException
+    public DeleteObjectsResult deleteObjects(DeleteObjectsRequest deleteObjectsRequest)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("deleteObjects",
-                s3Service.getEndpoint(), "");
-
-        KeyAndVersion[] keyAndVersions = deleteObjectsRequest
-                .getKeyAndVersions();
+        InterfaceLogBean reqBean = new InterfaceLogBean("deleteObjects", s3Service.getEndpoint(), "");
+        
+        KeyAndVersion[] keyAndVersions = deleteObjectsRequest.getKeyAndVersions();
         try
         {
-            runningLog.debug("deleteObjects",
-                    "keys: " + Arrays.toString(keyAndVersions));
+            runningLog.debug("deleteObjects", "keys: " + Arrays.toString(keyAndVersions));
             int i = 0;
             ObjectKeyAndVersion[] objectKeyAndVersion = new ObjectKeyAndVersion[keyAndVersions.length];
             for (KeyAndVersion keyAndVersion : keyAndVersions)
             {
-                objectKeyAndVersion[i++] = new ObjectKeyAndVersion(
-                        keyAndVersion.getKey(), keyAndVersion.getVersion());
+                objectKeyAndVersion[i++] = new ObjectKeyAndVersion(keyAndVersion.getKey(), keyAndVersion.getVersion());
             }
-            MultipleDeleteResult s3result = s3Service.deleteMultipleObjects(
-                    deleteObjectsRequest.getBucketName(), objectKeyAndVersion,
+            MultipleDeleteResult s3result =
+                s3Service.deleteMultipleObjects(deleteObjectsRequest.getBucketName(),
+                    objectKeyAndVersion,
                     deleteObjectsRequest.isQuiet());
-            runningLog.debug("deleteObjects",
-                    "keys: " + s3result.getDeletedObjectResults());
-
+            runningLog.debug("deleteObjects", "keys: " + s3result.getDeletedObjectResults());
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -3321,11 +3718,12 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("deleteObjects", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("deleteObjects",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 获取对象访问控制列表<br/>
      * 获取指定对象的权限控制列表（ACL）信息。
@@ -3393,18 +3791,17 @@ public class ObsClient
      *         }<br/>
      */
     public AccessControlList getObjectAcl(String bucketName, String objectKey, String versionId)
-            throws ObsException
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("getObjectAcl",
-                s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("getObjectAcl", s3Service.getEndpoint(), "");
         S3AccessControlList acl;
         try
         {
-            runningLog.debug("getObjectAcl","bucketName: " + bucketName + ", objectKey: " + objectKey);
+            runningLog.debug("getObjectAcl", "bucketName: " + bucketName + ", objectKey: " + objectKey);
             acl = s3Service.getObjectAcl(bucketName, objectKey, versionId);
             AccessControlList obsAcl = Convert.changeFromS3Acl(acl);
-            runningLog.debug("getObjectAcl","displayName: "
-            + obsAcl.getOwner().getDisplayName() + ", id: " + obsAcl.getOwner().getId());
+            runningLog.debug("getObjectAcl", "displayName: " + obsAcl.getOwner().getDisplayName() + ", id: "
+                + obsAcl.getOwner().getId());
             
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
@@ -3416,11 +3813,12 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("getObjectAcl", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("getObjectAcl",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 设置对象访问控制列表<br/>
      * OBS支持对对象的操作进行权限控制。该接口可以更改对象ACL，以改变对象的访问权限。
@@ -3483,18 +3881,16 @@ public class ObsClient
      *           + e.getResponseCode());<br/>
      *         }<br/>
      */
-    public void setObjectAcl(String bucketName, String objectKey,
-            AccessControlList acl, String versionId) throws ObsException
+    public void setObjectAcl(String bucketName, String objectKey, AccessControlList acl, String versionId)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("setObjectAcl",
-                s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("setObjectAcl", s3Service.getEndpoint(), "");
         S3AccessControlList s3acl = Convert.changeToS3Acl(acl);
         try
         {
-            runningLog.debug("setObjectAcl", "bucketName: " + bucketName
-                    + ", objectKey: " + objectKey);
+            runningLog.debug("setObjectAcl", "bucketName: " + bucketName + ", objectKey: " + objectKey);
             s3Service.putObjectAcl(bucketName, objectKey, s3acl, versionId);
-
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -3504,11 +3900,12 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("setObjectAcl", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("setObjectAcl",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 复制对象<br/>
      * 为OBS上已经存在的对象创建一个副本。
@@ -3579,35 +3976,28 @@ public class ObsClient
      * 
      */
     public CopyObjectResult copyObject(CopyObjectRequest copyObjectRequest)
-            throws ObsException
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("copyObject",
-                s3Service.getEndpoint(), "");
-
+        InterfaceLogBean reqBean = new InterfaceLogBean("copyObject", s3Service.getEndpoint(), "");
+        
         String sourceBucketName = copyObjectRequest.getSourceBucketName();
         String sourceKey = copyObjectRequest.getSourceObjectKey();
-        String destinationBucketName = copyObjectRequest
-                .getDestinationBucketName();
+        String destinationBucketName = copyObjectRequest.getDestinationBucketName();
         String destinationKey = copyObjectRequest.getDestinationObjectKey();
-
-        runningLog.debug("copyObject", "Source bucket name: "
-                + sourceBucketName + ", sourceKey: " + sourceKey
-                + ", destinationBucketName: " + destinationBucketName
-                + ", destinationKey: " + destinationKey);
-
+        
+        runningLog.debug("copyObject", "Source bucket name: " + sourceBucketName + ", sourceKey: " + sourceKey
+            + ", destinationBucketName: " + destinationBucketName + ", destinationKey: " + destinationKey);
+        
         StorageObject destinationObject = new StorageObject(destinationKey);
         try
         {
-            Map<String, Object> retMap = s3Service.copyObject(sourceBucketName,
-                    sourceKey, destinationBucketName, destinationObject, false);
+            Map<String, Object> retMap =
+                s3Service.copyObject(sourceBucketName, sourceKey, destinationBucketName, destinationObject, false);
             CopyObjectResult copyRet = new CopyObjectResult();
             Convert.fillCopyResult(copyRet, retMap);
-            runningLog.debug(
-                    "copyObject",
-                    "CopyObjectResult Etag: " + copyRet.getEtag()
-                            + ", CopyObjectResult LastModified: "
-                            + copyRet.getLastModified());
-
+            runningLog.debug("copyObject", "CopyObjectResult Etag: " + copyRet.getEtag()
+                + ", CopyObjectResult LastModified: " + copyRet.getLastModified());
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -3618,11 +4008,12 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("copyObject", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("copyObject",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 复制对象<br/>
      * 为OBS上已经存在的对象创建一个副本。
@@ -3676,31 +4067,25 @@ public class ObsClient
      *         &nbsp;&nbsp;&nbsp;&nbsp;  System.out.println("Copy object failed. " + e.getErrorMessage() + " response code :" + e.getResponseCode());<br/>
      *         }<br/>
      */
-    public CopyObjectResult copyObject(String sourceBucketName,
-            String sourceObjectKey, String destBucketName, String destObjectKey)
-            throws ObsException
+    public CopyObjectResult copyObject(String sourceBucketName, String sourceObjectKey, String destBucketName,
+        String destObjectKey)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("copyObject",
-                s3Service.getEndpoint(), "");
-
+        InterfaceLogBean reqBean = new InterfaceLogBean("copyObject", s3Service.getEndpoint(), "");
+        
         StorageObject destinationObject = new StorageObject(destObjectKey);
         try
         {
-            runningLog.debug("copyObject", "Source bucket name: "
-                    + sourceBucketName + ", sourceKey: " + sourceObjectKey
-                    + ", destinationBucketName: " + destBucketName
-                    + ", destinationKey: " + destObjectKey);
-
-            Map<String, Object> retMap = s3Service.copyObject(sourceBucketName,
-                    sourceObjectKey, destBucketName, destinationObject, false);
+            runningLog.debug("copyObject", "Source bucket name: " + sourceBucketName + ", sourceKey: "
+                + sourceObjectKey + ", destinationBucketName: " + destBucketName + ", destinationKey: " + destObjectKey);
+            
+            Map<String, Object> retMap =
+                s3Service.copyObject(sourceBucketName, sourceObjectKey, destBucketName, destinationObject, false);
             CopyObjectResult copyRet = new CopyObjectResult();
             Convert.fillCopyResult(copyRet, retMap);
-            runningLog.debug(
-                    "copyObject",
-                    "CopyObjectResult Etag: " + copyRet.getEtag()
-                            + ", CopyObjectResult LastModified: "
-                            + copyRet.getLastModified());
-
+            runningLog.debug("copyObject", "CopyObjectResult Etag: " + copyRet.getEtag()
+                + ", CopyObjectResult LastModified: " + copyRet.getLastModified());
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -3711,281 +4096,279 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("copyObject", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("copyObject",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
-//    /**
-//     * 创建获取桶内对象列表临时授权
-//     * 
-//     * @param bucketName 桶名
-//     * @param expiryTime 临时授权的有效时间
-//     * @return 临时授权的URL字符串
-//     * @throws ObsException ObsException
-//     */
-//    public String createSignedGetObjectListUrl(String bucketName,
-//            Date expiryTime) throws ObsException
-//    {
-//        InterfaceLogBean reqBean = new InterfaceLogBean(
-//                "createSignedGetObjectListUrl", s3Service.getEndpoint(), "");
-//
-//        try
-//        {
-//            runningLog.debug("createSignedGetObjectListUrl", "bucketName: "
-//                    + bucketName + ", expiryTime: " + expiryTime);
-//            String a = s3Service.createSignedGetUrl(bucketName, null,
-//                    expiryTime);
-//            runningLog
-//                    .debug("createSignedGetObjectListUrl", "return url: " + a);
-//
-//            reqBean.setRespTime(new Date());
-//            reqBean.setResultCode("0");
-//            ilog.info(reqBean);
-//            return a;
-//        }
-//        catch (S3ServiceException e)
-//        {
-//            reqBean.setRespTime(new Date());
-//            reqBean.setResultCode(e.getErrorCode());
-//            ilog.error(reqBean);
-//            runningLog.error("createSignedGetObjectListUrl",
-//                    "Exception:" + (null == e.getXmlMessage() ? e.getErrorMessage() : e.getXmlMessage()));
-//            throw Convert.changeFromS3Exception(e);
-//        }
-//    }
-
-//    /**
-//     * 创建获取对象内容的临时授权
-//     * 
-//     * @param bucketName 桶名
-//     * @param objectKey 对象名
-//     * @param expiryTime 临时授权的有效时间
-//     * @return 临时授权的URL字符串
-//     * @throws ObsException ObsException
-//     */
-//    public String createSignedGetObjectUrl(String bucketName, String objectKey,
-//            Date expiryTime) throws ObsException
-//    {
-//        InterfaceLogBean reqBean = new InterfaceLogBean(
-//                "createSignedGetObjectListUrl", s3Service.getEndpoint(), "");
-//
-//        try
-//        {
-//            runningLog.debug("createSignedGetObjectListUrl", "bucketName: "
-//                    + bucketName + ", objectKey" + objectKey + ", expiryTime: "
-//                    + expiryTime);
-//            String a = s3Service.createSignedGetUrl(bucketName, objectKey,
-//                    expiryTime);
-//            runningLog
-//                    .debug("createSignedGetObjectListUrl", "return url: " + a);
-//
-//            reqBean.setRespTime(new Date());
-//            reqBean.setResultCode("0");
-//            ilog.info(reqBean);
-//            return a;
-//        }
-//        catch (S3ServiceException e)
-//        {
-//            reqBean.setRespTime(new Date());
-//            reqBean.setResultCode(e.getErrorCode());
-//            ilog.error(reqBean);
-//            runningLog.error("createSignedGetObjectUrl",
-//                    "Exception:" + (null == e.getXmlMessage() ? e.getErrorMessage() : e.getXmlMessage()));
-//            throw Convert.changeFromS3Exception(e);
-//        }
-//    }
-
-//    /**
-//     * 创建获取对象元数据的临时授权
-//     * 
-//     * @param bucketName 桶名
-//     * @param objectKey 对象名
-//     * @param expiryTime 临时授权的有效时间
-//     * @return 临时授权的URL字符串
-//     * @throws ObsException ObsException
-//     */
-//    public String createSignedHeadObjectUrl(String bucketName,
-//            String objectKey, Date expiryTime) throws ObsException
-//    {
-//        InterfaceLogBean reqBean = new InterfaceLogBean(
-//                "createSignedGetObjectListUrl", s3Service.getEndpoint(), "");
-//
-//        try
-//        {
-//            runningLog.debug("createSignedHeadObjectUrl", "bucketName: "
-//                    + bucketName + ", objectKey" + objectKey + ", expiryTime: "
-//                    + expiryTime);
-//            String a = s3Service.createSignedHeadUrl(bucketName, objectKey,
-//                    expiryTime);
-//            runningLog.debug("createSignedHeadObjectUrl", "return url: " + a);
-//
-//            reqBean.setRespTime(new Date());
-//            reqBean.setResultCode("0");
-//            ilog.info(reqBean);
-//            return a;
-//        }
-//        catch (S3ServiceException e)
-//        {
-//            reqBean.setRespTime(new Date());
-//            reqBean.setResultCode(e.getErrorCode());
-//            ilog.error(reqBean);
-//            runningLog.error("createSignedHeadObjectUrl",
-//                    "Exception:" + (null == e.getXmlMessage() ? e.getErrorMessage() : e.getXmlMessage()));
-//            throw Convert.changeFromS3Exception(e);
-//        }
-//    }
-
-//    /**
-//     * 创建获取桶ACL的临时授权
-//     * 
-//     * @param bucketName 桶名
-//     * @param expiryTime 临时授权的有效时间
-//     * @return 临时授权的URL字符串
-//     * @throws ObsException ObsException
-//     */
-//    public String createSignedGetBucketAclUrl(String bucketName, Date expiryTime)
-//            throws ObsException
-//    {
-//        InterfaceLogBean reqBean = new InterfaceLogBean(
-//                "createSignedGetBucketAclUrl", s3Service.getEndpoint(), "");
-//        try
-//        {
-//            runningLog.debug("createSignedGetBucketAclUrl", "bucketName: "
-//                    + bucketName + ", expiryTime: " + expiryTime);
-//            String a = s3Service.createSignedGetAclUrl(bucketName, null,
-//                    expiryTime);
-//            runningLog.debug("createSignedGetBucketAclUrl", "return url: " + a);
-//
-//            reqBean.setRespTime(new Date());
-//            reqBean.setResultCode("0");
-//            ilog.info(reqBean);
-//            return a;
-//        }
-//        catch (S3ServiceException e)
-//        {
-//            reqBean.setRespTime(new Date());
-//            reqBean.setResultCode(e.getErrorCode());
-//            ilog.error(reqBean);
-//            runningLog.error("createSignedGetBucketAclUrl",
-//                    "Exception:" + (null == e.getXmlMessage() ? e.getErrorMessage() : e.getXmlMessage()));
-//            throw Convert.changeFromS3Exception(e);
-//        }
-//    }
-
-//    /**
-//     * 创建获取对象ACL的临时授权
-//     * 
-//     * @param bucketName 桶名
-//     * @param objectKey 对象名
-//     * @param expiryTime 临时授权的有效时间
-//     * @return 临时授权的URL字符串
-//     * @throws ObsException ObsException
-//     */
-//    public String createSignedGetObjectAclUrl(String bucketName,
-//            String objectKey, Date expiryTime) throws ObsException
-//    {
-//        InterfaceLogBean reqBean = new InterfaceLogBean(
-//                "createSignedGetObjectAclUrl", s3Service.getEndpoint(), "");
-//        try
-//        {
-//            runningLog.debug("createSignedGetObjectAclUrl", "bucketName: "
-//                    + bucketName + ", expiryTime: " + expiryTime);
-//            String a = s3Service.createSignedGetAclUrl(bucketName, objectKey,
-//                    expiryTime);
-//            runningLog.debug("createSignedGetObjectAclUrl", "return url: " + a);
-//
-//            reqBean.setRespTime(new Date());
-//            reqBean.setResultCode("0");
-//            ilog.info(reqBean);
-//            return a;
-//        }
-//        catch (S3ServiceException e)
-//        {
-//            reqBean.setRespTime(new Date());
-//            reqBean.setResultCode(e.getErrorCode());
-//            ilog.error(reqBean);
-//            runningLog.error("createSignedGetObjectAclUrl",
-//                    "Exception:" + (null == e.getXmlMessage() ? e.getErrorMessage() : e.getXmlMessage()));
-//            throw Convert.changeFromS3Exception(e);
-//        }
-//    }
-
-//    /**
-//     * 创建修改桶的ACL临时授权,返回的URL字符串可以供其他用户修改桶ACL使用
-//     * 
-//     * @param bucketName 桶名
-//     * @param expiryTime 临时授权的有效时间
-//     * @return 临时授权的URL字符串
-//     * @throws ObsException ObsException
-//     */
-//    public String createSignedPutBucketAclUrl(String bucketName, Date expiryTime)
-//            throws ObsException
-//    {
-//        InterfaceLogBean reqBean = new InterfaceLogBean(
-//                "createSignedPutBucketAclUrl", s3Service.getEndpoint(), "");
-//        try
-//        {
-//            runningLog.debug("createSignedPutBucketAclUrl", "bucketName: "
-//                    + bucketName + ", expiryTime: " + expiryTime);
-//            String a = s3Service.createSignedPutAclUrl(bucketName, null,
-//                    expiryTime);
-//            runningLog.debug("createSignedPutBucketAclUrl", "return url: " + a);
-//
-//            reqBean.setRespTime(new Date());
-//            reqBean.setResultCode("0");
-//            ilog.info(reqBean);
-//            return a;
-//        }
-//        catch (S3ServiceException e)
-//        {
-//            reqBean.setRespTime(new Date());
-//            reqBean.setResultCode(e.getErrorCode());
-//            ilog.error(reqBean);
-//            runningLog.error("createSignedPutBucketAclUrl",
-//                    "Exception:" + (null == e.getXmlMessage() ? e.getErrorMessage() : e.getXmlMessage()));
-//            throw Convert.changeFromS3Exception(e);
-//        }
-//    }
-
-//    /**
-//     * 创建修改对象的ACL临时授权，返回的URL字符串可以供其他用户修改对象ACL使用
-//     * 
-//     * @param bucketName 桶名
-//     * @param objectKey 对象名
-//     * @param expiryTime 临时授权的有效时间
-//     * @return 临时授权的URL字符串
-//     * @throws ObsException ObsException
-//     */
-//    public String createSignedPutObjectAclUrl(String bucketName,
-//            String objectKey, Date expiryTime) throws ObsException
-//    {
-//        InterfaceLogBean reqBean = new InterfaceLogBean(
-//                "createSignedPutBucketAclUrl", s3Service.getEndpoint(), "");
-//        try
-//        {
-//            runningLog.debug("createSignedPutObjectAclUrl", "bucketName: "
-//                    + bucketName + ", expiryTime: " + expiryTime);
-//            String a = s3Service.createSignedPutAclUrl(bucketName, objectKey,
-//                    expiryTime);
-//            runningLog.debug("createSignedPutObjectAclUrl", "return url: " + a);
-//
-//            reqBean.setRespTime(new Date());
-//            reqBean.setResultCode("0");
-//            ilog.info(reqBean);
-//            return a;
-//        }
-//        catch (S3ServiceException e)
-//        {
-//            reqBean.setRespTime(new Date());
-//            reqBean.setResultCode(e.getErrorCode());
-//            ilog.error(reqBean);
-//            runningLog.error("createSignedPutObjectAclUrl",
-//                    "Exception:" + (null == e.getXmlMessage() ? e.getErrorMessage() : e.getXmlMessage()));
-//            throw Convert.changeFromS3Exception(e);
-//        }
-//    }
-
+    
+    /**
+     * 创建获取桶内对象列表临时授权
+     * 
+     * @param bucketName 桶名
+     * @param expiryTime 临时授权的有效时间
+     * @return 临时授权的URL字符串
+     * @throws ObsException ObsException
+     */
+    public String createSignedGetObjectListUrl(String bucketName, Date expiryTime)
+        throws ObsException
+    {
+        InterfaceLogBean reqBean = new InterfaceLogBean("createSignedGetObjectListUrl", s3Service.getEndpoint(), "");
+        
+        try
+        {
+            runningLog.debug("createSignedGetObjectListUrl", "bucketName: " + bucketName + ", expiryTime: "
+                + expiryTime);
+            String a = s3Service.createSignedGetUrl(bucketName, null, expiryTime);
+            runningLog.debug("createSignedGetObjectListUrl", "return url: " + a);
+            
+            reqBean.setRespTime(new Date());
+            reqBean.setResultCode("0");
+            ilog.info(reqBean);
+            return a;
+        }
+        catch (S3ServiceException e)
+        {
+            reqBean.setRespTime(new Date());
+            reqBean.setResultCode(e.getErrorCode());
+            ilog.error(reqBean);
+            runningLog.error("createSignedGetObjectListUrl",
+                "Exception:" + (null == e.getXmlMessage() ? e.getErrorMessage() : e.getXmlMessage()));
+            throw Convert.changeFromS3Exception(e);
+        }
+    }
+    
+    //    /**
+    //     * 创建获取对象内容的临时授权
+    //     * 
+    //     * @param bucketName 桶名
+    //     * @param objectKey 对象名
+    //     * @param expiryTime 临时授权的有效时间
+    //     * @return 临时授权的URL字符串
+    //     * @throws ObsException ObsException
+    //     */
+    //    public String createSignedGetObjectUrl(String bucketName, String objectKey,
+    //            Date expiryTime) throws ObsException
+    //    {
+    //        InterfaceLogBean reqBean = new InterfaceLogBean(
+    //                "createSignedGetObjectListUrl", s3Service.getEndpoint(), "");
+    //
+    //        try
+    //        {
+    //            runningLog.debug("createSignedGetObjectListUrl", "bucketName: "
+    //                    + bucketName + ", objectKey" + objectKey + ", expiryTime: "
+    //                    + expiryTime);
+    //            String a = s3Service.createSignedGetUrl(bucketName, objectKey,
+    //                    expiryTime);
+    //            runningLog
+    //                    .debug("createSignedGetObjectListUrl", "return url: " + a);
+    //
+    //            reqBean.setRespTime(new Date());
+    //            reqBean.setResultCode("0");
+    //            ilog.info(reqBean);
+    //            return a;
+    //        }
+    //        catch (S3ServiceException e)
+    //        {
+    //            reqBean.setRespTime(new Date());
+    //            reqBean.setResultCode(e.getErrorCode());
+    //            ilog.error(reqBean);
+    //            runningLog.error("createSignedGetObjectUrl",
+    //                    "Exception:" + (null == e.getXmlMessage() ? e.getErrorMessage() : e.getXmlMessage()));
+    //            throw Convert.changeFromS3Exception(e);
+    //        }
+    //    }
+    
+    //    /**
+    //     * 创建获取对象元数据的临时授权
+    //     * 
+    //     * @param bucketName 桶名
+    //     * @param objectKey 对象名
+    //     * @param expiryTime 临时授权的有效时间
+    //     * @return 临时授权的URL字符串
+    //     * @throws ObsException ObsException
+    //     */
+    //    public String createSignedHeadObjectUrl(String bucketName,
+    //            String objectKey, Date expiryTime) throws ObsException
+    //    {
+    //        InterfaceLogBean reqBean = new InterfaceLogBean(
+    //                "createSignedGetObjectListUrl", s3Service.getEndpoint(), "");
+    //
+    //        try
+    //        {
+    //            runningLog.debug("createSignedHeadObjectUrl", "bucketName: "
+    //                    + bucketName + ", objectKey" + objectKey + ", expiryTime: "
+    //                    + expiryTime);
+    //            String a = s3Service.createSignedHeadUrl(bucketName, objectKey,
+    //                    expiryTime);
+    //            runningLog.debug("createSignedHeadObjectUrl", "return url: " + a);
+    //
+    //            reqBean.setRespTime(new Date());
+    //            reqBean.setResultCode("0");
+    //            ilog.info(reqBean);
+    //            return a;
+    //        }
+    //        catch (S3ServiceException e)
+    //        {
+    //            reqBean.setRespTime(new Date());
+    //            reqBean.setResultCode(e.getErrorCode());
+    //            ilog.error(reqBean);
+    //            runningLog.error("createSignedHeadObjectUrl",
+    //                    "Exception:" + (null == e.getXmlMessage() ? e.getErrorMessage() : e.getXmlMessage()));
+    //            throw Convert.changeFromS3Exception(e);
+    //        }
+    //    }
+    
+    //    /**
+    //     * 创建获取桶ACL的临时授权
+    //     * 
+    //     * @param bucketName 桶名
+    //     * @param expiryTime 临时授权的有效时间
+    //     * @return 临时授权的URL字符串
+    //     * @throws ObsException ObsException
+    //     */
+    //    public String createSignedGetBucketAclUrl(String bucketName, Date expiryTime)
+    //            throws ObsException
+    //    {
+    //        InterfaceLogBean reqBean = new InterfaceLogBean(
+    //                "createSignedGetBucketAclUrl", s3Service.getEndpoint(), "");
+    //        try
+    //        {
+    //            runningLog.debug("createSignedGetBucketAclUrl", "bucketName: "
+    //                    + bucketName + ", expiryTime: " + expiryTime);
+    //            String a = s3Service.createSignedGetAclUrl(bucketName, null,
+    //                    expiryTime);
+    //            runningLog.debug("createSignedGetBucketAclUrl", "return url: " + a);
+    //
+    //            reqBean.setRespTime(new Date());
+    //            reqBean.setResultCode("0");
+    //            ilog.info(reqBean);
+    //            return a;
+    //        }
+    //        catch (S3ServiceException e)
+    //        {
+    //            reqBean.setRespTime(new Date());
+    //            reqBean.setResultCode(e.getErrorCode());
+    //            ilog.error(reqBean);
+    //            runningLog.error("createSignedGetBucketAclUrl",
+    //                    "Exception:" + (null == e.getXmlMessage() ? e.getErrorMessage() : e.getXmlMessage()));
+    //            throw Convert.changeFromS3Exception(e);
+    //        }
+    //    }
+    
+    //    /**
+    //     * 创建获取对象ACL的临时授权
+    //     * 
+    //     * @param bucketName 桶名
+    //     * @param objectKey 对象名
+    //     * @param expiryTime 临时授权的有效时间
+    //     * @return 临时授权的URL字符串
+    //     * @throws ObsException ObsException
+    //     */
+    //    public String createSignedGetObjectAclUrl(String bucketName,
+    //            String objectKey, Date expiryTime) throws ObsException
+    //    {
+    //        InterfaceLogBean reqBean = new InterfaceLogBean(
+    //                "createSignedGetObjectAclUrl", s3Service.getEndpoint(), "");
+    //        try
+    //        {
+    //            runningLog.debug("createSignedGetObjectAclUrl", "bucketName: "
+    //                    + bucketName + ", expiryTime: " + expiryTime);
+    //            String a = s3Service.createSignedGetAclUrl(bucketName, objectKey,
+    //                    expiryTime);
+    //            runningLog.debug("createSignedGetObjectAclUrl", "return url: " + a);
+    //
+    //            reqBean.setRespTime(new Date());
+    //            reqBean.setResultCode("0");
+    //            ilog.info(reqBean);
+    //            return a;
+    //        }
+    //        catch (S3ServiceException e)
+    //        {
+    //            reqBean.setRespTime(new Date());
+    //            reqBean.setResultCode(e.getErrorCode());
+    //            ilog.error(reqBean);
+    //            runningLog.error("createSignedGetObjectAclUrl",
+    //                    "Exception:" + (null == e.getXmlMessage() ? e.getErrorMessage() : e.getXmlMessage()));
+    //            throw Convert.changeFromS3Exception(e);
+    //        }
+    //    }
+    
+    //    /**
+    //     * 创建修改桶的ACL临时授权,返回的URL字符串可以供其他用户修改桶ACL使用
+    //     * 
+    //     * @param bucketName 桶名
+    //     * @param expiryTime 临时授权的有效时间
+    //     * @return 临时授权的URL字符串
+    //     * @throws ObsException ObsException
+    //     */
+    //    public String createSignedPutBucketAclUrl(String bucketName, Date expiryTime)
+    //            throws ObsException
+    //    {
+    //        InterfaceLogBean reqBean = new InterfaceLogBean(
+    //                "createSignedPutBucketAclUrl", s3Service.getEndpoint(), "");
+    //        try
+    //        {
+    //            runningLog.debug("createSignedPutBucketAclUrl", "bucketName: "
+    //                    + bucketName + ", expiryTime: " + expiryTime);
+    //            String a = s3Service.createSignedPutAclUrl(bucketName, null,
+    //                    expiryTime);
+    //            runningLog.debug("createSignedPutBucketAclUrl", "return url: " + a);
+    //
+    //            reqBean.setRespTime(new Date());
+    //            reqBean.setResultCode("0");
+    //            ilog.info(reqBean);
+    //            return a;
+    //        }
+    //        catch (S3ServiceException e)
+    //        {
+    //            reqBean.setRespTime(new Date());
+    //            reqBean.setResultCode(e.getErrorCode());
+    //            ilog.error(reqBean);
+    //            runningLog.error("createSignedPutBucketAclUrl",
+    //                    "Exception:" + (null == e.getXmlMessage() ? e.getErrorMessage() : e.getXmlMessage()));
+    //            throw Convert.changeFromS3Exception(e);
+    //        }
+    //    }
+    
+    //    /**
+    //     * 创建修改对象的ACL临时授权，返回的URL字符串可以供其他用户修改对象ACL使用
+    //     * 
+    //     * @param bucketName 桶名
+    //     * @param objectKey 对象名
+    //     * @param expiryTime 临时授权的有效时间
+    //     * @return 临时授权的URL字符串
+    //     * @throws ObsException ObsException
+    //     */
+    //    public String createSignedPutObjectAclUrl(String bucketName,
+    //            String objectKey, Date expiryTime) throws ObsException
+    //    {
+    //        InterfaceLogBean reqBean = new InterfaceLogBean(
+    //                "createSignedPutBucketAclUrl", s3Service.getEndpoint(), "");
+    //        try
+    //        {
+    //            runningLog.debug("createSignedPutObjectAclUrl", "bucketName: "
+    //                    + bucketName + ", expiryTime: " + expiryTime);
+    //            String a = s3Service.createSignedPutAclUrl(bucketName, objectKey,
+    //                    expiryTime);
+    //            runningLog.debug("createSignedPutObjectAclUrl", "return url: " + a);
+    //
+    //            reqBean.setRespTime(new Date());
+    //            reqBean.setResultCode("0");
+    //            ilog.info(reqBean);
+    //            return a;
+    //        }
+    //        catch (S3ServiceException e)
+    //        {
+    //            reqBean.setRespTime(new Date());
+    //            reqBean.setResultCode(e.getErrorCode());
+    //            ilog.error(reqBean);
+    //            runningLog.error("createSignedPutObjectAclUrl",
+    //                    "Exception:" + (null == e.getXmlMessage() ? e.getErrorMessage() : e.getXmlMessage()));
+    //            throw Convert.changeFromS3Exception(e);
+    //        }
+    //    }
+    
     /**
      * 初始化多段上传任务<br/>
      * 使用多段上传特性时，用户必须首先调用初始化多段上传任务接口创建任务。<br/>
@@ -4038,35 +4421,27 @@ public class ObsClient
                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ ". ResponseCode: " + e.getResponseCode());<br/>
             }<br/>
      */
-    public InitiateMultipartUploadResult initiateMultipartUpload(
-            InitiateMultipartUploadRequest request) throws ObsException
+    public InitiateMultipartUploadResult initiateMultipartUpload(InitiateMultipartUploadRequest request)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean(
-                "initiateMultipartUpload", s3Service.getEndpoint(), "");
-
+        InterfaceLogBean reqBean = new InterfaceLogBean("initiateMultipartUpload", s3Service.getEndpoint(), "");
+        
         String bucketName = request.getBucketName();
         String objectKey = request.getObjectKey();
         Map<String, Object> metadata = new HashMap<String, Object>();
-        if(null != request.getWebSiteRedirectLocation())
+        if (null != request.getWebSiteRedirectLocation())
         {
-            metadata.put("x-amz-website-redirect-location",
-                request.getWebSiteRedirectLocation());
+            metadata.put("x-amz-website-redirect-location", request.getWebSiteRedirectLocation());
         }
         S3MultipartUpload testMultipartUpload;
         try
         {
-            runningLog.debug("InitiateMultipartUploadResult", "bucketName: "
-                    + bucketName + ", objectKey: " + objectKey);
-            testMultipartUpload = s3Service.multipartStartUpload(bucketName,
-                    objectKey, metadata);
-            InitiateMultipartUploadResult ret = Convert
-                    .changeFromS3MulipartRet(testMultipartUpload);
-            runningLog.debug(
-                    "InitiateMultipartUploadResult",
-                    "bucketName: " + ret.getBucketName() + ", objectKey: "
-                            + ret.getObjectKey() + ", UploadId:"
-                            + ret.getUploadId());
-
+            runningLog.debug("InitiateMultipartUploadResult", "bucketName: " + bucketName + ", objectKey: " + objectKey);
+            testMultipartUpload = s3Service.multipartStartUpload(bucketName, objectKey, metadata);
+            InitiateMultipartUploadResult ret = Convert.changeFromS3MulipartRet(testMultipartUpload);
+            runningLog.debug("InitiateMultipartUploadResult", "bucketName: " + ret.getBucketName() + ", objectKey: "
+                + ret.getObjectKey() + ", UploadId:" + ret.getUploadId());
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -4078,11 +4453,11 @@ public class ObsClient
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
             runningLog.error("InitiateMultipartUploadResult",
-                    "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 取消上传多段上传任务<br/>
      * 如果用户希望取消一个任务，可以调用取消多段上传任务接口取消任务。
@@ -4126,19 +4501,16 @@ public class ObsClient
          }<br/>
      */
     public void abortMultipartUpload(AbortMultipartUploadRequest request)
-            throws ObsException
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("abortMultipartUpload",
-                s3Service.getEndpoint(), "");
-
+        InterfaceLogBean reqBean = new InterfaceLogBean("abortMultipartUpload", s3Service.getEndpoint(), "");
+        
         runningLog.debug("abortMultipartUpload",
-                "objectKey: " + request.getObjectKey() + ", UploadId: "
-                        + request.getUploadId());
+            "objectKey: " + request.getObjectKey() + ", UploadId: " + request.getUploadId());
         String uploadId = request.getUploadId();
         String bucketName = request.getBucketName();
         String objectKey = request.getObjectKey();
-        S3MultipartUpload upload = new S3MultipartUpload(uploadId, bucketName,
-                objectKey);
+        S3MultipartUpload upload = new S3MultipartUpload(uploadId, bucketName, objectKey);
         try
         {
             s3Service.multipartAbortUpload(upload);
@@ -4152,11 +4524,11 @@ public class ObsClient
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
             runningLog.error("abortMultipartUpload",
-                    "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 上传段<br/>
      * 多段上传任务创建后，用户可以通过指定多段上传任务号，利用该接口为特定的任务上传段。
@@ -4217,34 +4589,31 @@ public class ObsClient
         }<br/>
      */
     public UploadPartResult uploadPart(UploadPartRequest request)
-            throws ObsException, NoSuchAlgorithmException, IOException
+        throws ObsException, NoSuchAlgorithmException, IOException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("uploadPart",
-                s3Service.getEndpoint(), "");
-
-        runningLog.debug("uploadPart", "bucketName: " + request.getBucketName()
-                + "objectKey: " + request.getObjectKey() + ", partNumber: "
+        InterfaceLogBean reqBean = new InterfaceLogBean("uploadPart", s3Service.getEndpoint(), "");
+        
+        runningLog.debug("uploadPart",
+            "bucketName: " + request.getBucketName() + "objectKey: " + request.getObjectKey() + ", partNumber: "
                 + request.getPartNumber() + ", UploadId: " + request.getUploadId());
-
+        
         try
         {
-            S3MultipartUpload upload = new S3MultipartUpload(request.getUploadId(), request.getBucketName(),
-                request.getObjectKey());// 上传段的请求，其实只需要一个upload
+            S3MultipartUpload upload =
+                new S3MultipartUpload(request.getUploadId(), request.getBucketName(), request.getObjectKey());// 上传段的请求，其实只需要一个upload
             SS3Object object = new SS3Object(request.getFile());// 上传的对象
             object.setBucketName(request.getBucketName());
             object.setKey(request.getObjectKey());
-            if(null != request.getPartSize())
+            if (null != request.getPartSize())
             {
                 object.setContentLength(request.getPartSize());
             }
             
-            MultipartPart partRet = s3Service.multipartUploadPart(upload,
-                request.getPartNumber(), object);// 执行上传
+            MultipartPart partRet = s3Service.multipartUploadPart(upload, request.getPartNumber(), object);// 执行上传
             UploadPartResult ret = Convert.changeFromS3UploadPart(partRet);// 返回上传结果,段号和Etag
             
-            runningLog.debug("uploadPart", "bucketName: " + ret.getEtag()
-                    + ", partNumber: " + ret.getPartNumber());
-
+            runningLog.debug("uploadPart", "bucketName: " + ret.getEtag() + ", partNumber: " + ret.getPartNumber());
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -4255,11 +4624,12 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("uploadPart", "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
+            runningLog.error("uploadPart",
+                "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 拷贝段<br/>
      * 以一个对象为源拷贝为多段上传任务中的一个段。
@@ -4312,32 +4682,35 @@ public class ObsClient
         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ ". ResponseCode: " + e.getResponseCode());<br/>
         }<br/>
      */
-    public CopyPartResult copyPart(CopyPartRequest request) throws ObsException
+    public CopyPartResult copyPart(CopyPartRequest request)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("copyPart",
-                s3Service.getEndpoint(), "");
-
+        InterfaceLogBean reqBean = new InterfaceLogBean("copyPart", s3Service.getEndpoint(), "");
+        
         String uploadId = request.getUploadId();
         String sourceBucketName = request.getSourceBucketName();
         String sourceObjectKey = request.getSourceObjectKey();
         String destBucketName = request.getDestinationBucketName();
         String destObjectKey = request.getDestinationObjectKey();
         Integer partNumber = request.getPartNumber();
-        runningLog.debug("copyPart", "sourceBucketName: " + sourceBucketName
-                + "sourceObjectKey: " + sourceObjectKey + "destBucketName: "
-                + destBucketName + "destObjectKey: " + destObjectKey
-                + ", partNumber: " + partNumber + ", UploadId: " + uploadId);
-
+        runningLog.debug("copyPart", "sourceBucketName: " + sourceBucketName + "sourceObjectKey: " + sourceObjectKey
+            + "destBucketName: " + destBucketName + "destObjectKey: " + destObjectKey + ", partNumber: " + partNumber
+            + ", UploadId: " + uploadId);
+        
         try
         {
-            MultipartPart partRet = s3Service.multipartUploadPartCopy(uploadId,
-                    partNumber, sourceBucketName, destBucketName,
-                    destObjectKey, sourceObjectKey, request.getByteRangeStart(),
+            MultipartPart partRet =
+                s3Service.multipartUploadPartCopy(uploadId,
+                    partNumber,
+                    sourceBucketName,
+                    destBucketName,
+                    destObjectKey,
+                    sourceObjectKey,
+                    request.getByteRangeStart(),
                     request.getByteRangeEnd());
             CopyPartResult ret = Convert.changeFromS3MultiCopyPart(partRet);
-            runningLog.debug("copyPart", "bucketName: " + ret.getEtag()
-                    + ", partNumber: " + ret.getPartNumber());
-
+            runningLog.debug("copyPart", "bucketName: " + ret.getEtag() + ", partNumber: " + ret.getPartNumber());
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -4352,7 +4725,7 @@ public class ObsClient
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 合并段<br/>
      * 合并一个多段上传任务的段。
@@ -4432,41 +4805,33 @@ public class ObsClient
         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ ". ResponseCode: " + e.getResponseCode());<br/>
         }<br/>
      */
-    public CompleteMultipartUploadResult completeMultipartUpload(
-            CompleteMultipartUploadRequest request) throws ObsException
+    public CompleteMultipartUploadResult completeMultipartUpload(CompleteMultipartUploadRequest request)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean(
-                "completeMultipartUpload", s3Service.getEndpoint(), "");
-
+        InterfaceLogBean reqBean = new InterfaceLogBean("completeMultipartUpload", s3Service.getEndpoint(), "");
+        
         String uploadId = request.getUploadId();
         String bucketName = request.getBucketName();
         String objectKey = request.getObjectKey();
-        S3MultipartUpload upload = new S3MultipartUpload(uploadId, bucketName,
-                objectKey);
+        S3MultipartUpload upload = new S3MultipartUpload(uploadId, bucketName, objectKey);
         List<PartEtag> partEtags = request.getPartEtag();
         List<MultipartPart> parts = new ArrayList<MultipartPart>();
         for (PartEtag partEtag : partEtags)
         {
-            MultipartPart multiPart = new MultipartPart(
-                    partEtag.getPartNumber(), new Date(), partEtag.geteTag(),
-                    0l);
+            MultipartPart multiPart = new MultipartPart(partEtag.getPartNumber(), new Date(), partEtag.geteTag(), 0l);
             parts.add(multiPart);
         }
-        runningLog.debug("completeMultipartUpload", "bucketName: " + bucketName
-                + "objectKey: " + objectKey + "uploadId: " + uploadId);
-
+        runningLog.debug("completeMultipartUpload", "bucketName: " + bucketName + "objectKey: " + objectKey
+            + "uploadId: " + uploadId);
+        
         try
         {
-            MultipartCompleted partCompleted = s3Service
-                    .multipartCompleteUpload(upload, parts);
-            CompleteMultipartUploadResult result = Convert
-                    .changeFromS3PartCompleted(partCompleted);
-            runningLog.debug(
-                    "completeMultipartUpload",
-                    "BucketName: " + result.getBucketName() + "Etag: "
-                            + result.getEtag() + ", ObjectKey: "
-                            + result.getObjectKey());
-
+            MultipartCompleted partCompleted = s3Service.multipartCompleteUpload(upload, parts);
+            CompleteMultipartUploadResult result = Convert.changeFromS3PartCompleted(partCompleted);
+            runningLog.debug("completeMultipartUpload",
+                "BucketName: " + result.getBucketName() + "Etag: " + result.getEtag() + ", ObjectKey: "
+                    + result.getObjectKey());
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -4477,12 +4842,11 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("completeMultipartUpload",
-                    "Exception:" + e.getMessage());
+            runningLog.error("completeMultipartUpload", "Exception:" + e.getMessage());
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 列出已上传的段<br/>
      * 查询一个多段上传任务所属的所有段信息。
@@ -4534,11 +4898,10 @@ public class ObsClient
         }<br/>
      */
     public ListPartsResult listParts(ListPartsRequest request)
-            throws ObsException
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("listParts",
-                s3Service.getEndpoint(), "");
-
+        InterfaceLogBean reqBean = new InterfaceLogBean("listParts", s3Service.getEndpoint(), "");
+        
         S3ListPartsRequest s3Request = new S3ListPartsRequest();
         s3Request.setBucketName(request.getBucketName());
         s3Request.setKey(request.getKey());
@@ -4550,23 +4913,23 @@ public class ObsClient
             runningLog.debug("listParts", reqBean.toString());
             S3ListPartsResult s3Result = s3Service.listParts(s3Request);
             runningLog.debug("listParts", s3Result.toString());
-
+            
             ListPartsResult result = new ListPartsResult();
             result.setBucket(s3Result.getBucket());
             S3Owner initiator = s3Result.getOwner();
-            if(null != initiator)
-            result.setInitiator(Convert.changeFromS3Owner(initiator));
+            if (null != initiator)
+                result.setInitiator(Convert.changeFromS3Owner(initiator));
             result.setKey(s3Result.getKey());
             result.setMaxParts(result.getMaxParts());
             S3Owner owner = s3Result.getOwner();
-            if(null != owner)
-            result.setOwner(Convert.changeFromS3Owner(owner));
+            if (null != owner)
+                result.setOwner(Convert.changeFromS3Owner(owner));
             List<MultipartPart> parts = s3Result.getPart();// 获得所有的上传段
             List<Multipart> list = Convert.changeFromS3UploadPartList(parts);// 转换查询到的段
             result.setMultipartList(list);
             result.setStorageClass(s3Result.getStorageClass());
             result.setUploadId(s3Result.getUploadId());
-
+            
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -4581,7 +4944,7 @@ public class ObsClient
             throw Convert.changeFromS3Exception(e);
         }
     }
-
+    
     /**
      * 列出所有执行中的多段上传任务。
      * 
@@ -4629,12 +4992,11 @@ public class ObsClient
      *         &nbsp;&nbsp;&nbsp;&nbsp;+ ". ResponseCode: " + e.getResponseCode());<br/>
         }<br/>
      */
-    public MultipartUploadListing listMultipartUploads(
-            ListMultipartUploadsRequest request) throws ObsException
+    public MultipartUploadListing listMultipartUploads(ListMultipartUploadsRequest request)
+        throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("listMultipartUploads",
-                s3Service.getEndpoint(), "");
-
+        InterfaceLogBean reqBean = new InterfaceLogBean("listMultipartUploads", s3Service.getEndpoint(), "");
+        
         String bucketName = request.getBucketName();
         Integer maxUploads = request.getMaxUploads();
         String prefix = request.getPrefix();
@@ -4643,25 +5005,23 @@ public class ObsClient
         String uploadIdMarker = request.getUploadIdMarker();
         try
         {
-            runningLog.debug("listMultipartUploads", "BucketName: "
-                    + bucketName + ", maxUploads: " + maxUploads + ", prefix: "
-                    + prefix + ", delimiter: " + delimiter + ", keyMarker: "
-                    + keyMarker + ", uploadIdMarker: " + uploadIdMarker);
-            MultipartUploadChunk result = s3Service
-                    .multipartListUploadsChunked(bucketName, prefix, delimiter,
-                            keyMarker, uploadIdMarker, maxUploads, false);
-            MultipartUploadListing listResult =
-                Convert.changeFromS3MultipartUploadChunk(result);// 将jet3的段任务转换为obs的段任务;
+            runningLog.debug("listMultipartUploads", "BucketName: " + bucketName + ", maxUploads: " + maxUploads
+                + ", prefix: " + prefix + ", delimiter: " + delimiter + ", keyMarker: " + keyMarker
+                + ", uploadIdMarker: " + uploadIdMarker);
+            MultipartUploadChunk result =
+                s3Service.multipartListUploadsChunked(bucketName,
+                    prefix,
+                    delimiter,
+                    keyMarker,
+                    uploadIdMarker,
+                    maxUploads,
+                    false);
+            MultipartUploadListing listResult = Convert.changeFromS3MultipartUploadChunk(result);// 将jet3的段任务转换为obs的段任务;
             listResult.setKeyMarker(keyMarker);// TODO
             listResult.setUploadIdMarker(uploadIdMarker);// TODO
-            runningLog.debug(
-                    "listMultipartUploads",
-                    "BucketName: " + listResult.getBucketName()
-                            + ", Delimiter: " + listResult.getDelimiter()
-                            + ", KeyMarker: " + listResult.getKeyMarker()
-                            + ", MaxUploads:" + listResult.getMaxUploads()
-                            + ", MultipartTask amount: "
-                            + listResult.getMultipartTaskList());
+            runningLog.debug("listMultipartUploads", "BucketName: " + listResult.getBucketName() + ", Delimiter: "
+                + listResult.getDelimiter() + ", KeyMarker: " + listResult.getKeyMarker() + ", MaxUploads:"
+                + listResult.getMaxUploads() + ", MultipartTask amount: " + listResult.getMultipartTaskList());
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
             ilog.info(reqBean);
@@ -4672,40 +5032,30 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("listMultipartUploads",
-                    "Exception:" + e.getMessage());
+            runningLog.error("listMultipartUploads", "Exception:" + e.getMessage());
             throw Convert.changeFromS3Exception(e);
         }
-
-    }
-
-    private void configfieldToProperties(ObsConfiguration config,
-            Jets3tProperties jets3tProperties)
-    {
-        jets3tProperties.setProperty(ObsConstraint.END_POINT,
-                config.getEndPoint());
-        jets3tProperties.setProperty(ObsConstraint.HTTP_PORT,
-                String.valueOf(config.getEndpointHttpPort()));
-        jets3tProperties.setProperty(ObsConstraint.HTTPS_ONLY,
-                String.valueOf(config.isHttpsOnly()));
-        jets3tProperties.setProperty(ObsConstraint.DISABLE_DNS_BUCKET,
-                String.valueOf(config.isDisableDnsBucket()));
-        jets3tProperties.setProperty(ObsConstraint.HTTPS_PORT,
-                String.valueOf(config.getEndpointHttpsPort()));
-        jets3tProperties.setProperty(ObsConstraint.HTTP_SOCKET_TIMEOUT,
-                String.valueOf(config.getSocketTimeout()));
-        jets3tProperties.setProperty(ObsConstraint.HTTP_MAX_CONNECT,
-                String.valueOf(config.getMaxConnections()));
-        jets3tProperties.setProperty(ObsConstraint.HTTP_RETRY_MAX,
-                String.valueOf(config.getMaxErrorRetry()));
-        jets3tProperties.setProperty(ObsConstraint.HTTP_CONNECT_TIMEOUT,
-                String.valueOf(config.getConnectionTimeout()));
-        jets3tProperties.setProperty(ObsConstraint.DEFAULT_BUCKET_LOCATION,
-                String.valueOf(config.getDefaultBucketLocation()));
+        
     }
     
-    private void asserParameterNotNull(String value,String errorMessage)
+    private void configfieldToProperties(ObsConfiguration config, Jets3tProperties jets3tProperties)
     {
-        if (value == null || "".equals(value)) throw new IllegalArgumentException(errorMessage);
+        jets3tProperties.setProperty(ObsConstraint.END_POINT, config.getEndPoint());
+        jets3tProperties.setProperty(ObsConstraint.HTTP_PORT, String.valueOf(config.getEndpointHttpPort()));
+        jets3tProperties.setProperty(ObsConstraint.HTTPS_ONLY, String.valueOf(config.isHttpsOnly()));
+        jets3tProperties.setProperty(ObsConstraint.DISABLE_DNS_BUCKET, String.valueOf(config.isDisableDnsBucket()));
+        jets3tProperties.setProperty(ObsConstraint.HTTPS_PORT, String.valueOf(config.getEndpointHttpsPort()));
+        jets3tProperties.setProperty(ObsConstraint.HTTP_SOCKET_TIMEOUT, String.valueOf(config.getSocketTimeout()));
+        jets3tProperties.setProperty(ObsConstraint.HTTP_MAX_CONNECT, String.valueOf(config.getMaxConnections()));
+        jets3tProperties.setProperty(ObsConstraint.HTTP_RETRY_MAX, String.valueOf(config.getMaxErrorRetry()));
+        jets3tProperties.setProperty(ObsConstraint.HTTP_CONNECT_TIMEOUT, String.valueOf(config.getConnectionTimeout()));
+        jets3tProperties.setProperty(ObsConstraint.DEFAULT_BUCKET_LOCATION,
+            String.valueOf(config.getDefaultBucketLocation()));
+    }
+    
+    private void asserParameterNotNull(String value, String errorMessage)
+    {
+        if (value == null || "".equals(value))
+            throw new IllegalArgumentException(errorMessage);
     }
 }

@@ -73,4 +73,7 @@ final class ObsConstraint
     //桶的默认区域值
     protected static final String DEFAULT_BUCKET_LOCATION_VALUE = "CHINA";
     
+    //桶的默认鉴权方式
+    protected static final String DEFAULT_BUCKET_LOCATION_SIGNA = "s3";
+    
 }

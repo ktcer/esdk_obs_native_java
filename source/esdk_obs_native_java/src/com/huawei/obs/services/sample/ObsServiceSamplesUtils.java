@@ -29,10 +29,9 @@ import com.huawei.obs.services.model.BucketStorageInfo;
 import com.huawei.obs.services.model.CanonicalGrantee;
 import com.huawei.obs.services.model.CompleteMultipartUploadRequest;
 import com.huawei.obs.services.model.CopyObjectResult;
-import com.huawei.obs.services.model.CopyPartRequest;
-import com.huawei.obs.services.model.CopyPartResult;
 import com.huawei.obs.services.model.DeleteObjectsRequest;
 import com.huawei.obs.services.model.GroupGrantee;
+import com.huawei.obs.services.model.HttpMethodEnum;
 import com.huawei.obs.services.model.InitiateMultipartUploadRequest;
 import com.huawei.obs.services.model.InitiateMultipartUploadResult;
 import com.huawei.obs.services.model.KeyAndVersion;
@@ -47,7 +46,6 @@ import com.huawei.obs.services.model.Permission;
 import com.huawei.obs.services.model.PutObjectResult;
 import com.huawei.obs.services.model.S3Bucket;
 import com.huawei.obs.services.model.S3Object;
-import com.huawei.obs.services.model.StoragePolicy;
 import com.huawei.obs.services.model.UploadPartRequest;
 import com.huawei.obs.services.model.UploadPartResult;
 
@@ -203,7 +201,7 @@ public class ObsServiceSamplesUtils
         hwAcl.grantPermission(groupGrant, Permission.PERMISSION_READ);
         try
         {
-            service.setBucketAcl(bucketName,null, hwAcl);
+            service.setBucketAcl(bucketName, null, hwAcl);
             System.out.println("set bucket acl success.");
         }
         catch (ObsException e)
@@ -213,45 +211,45 @@ public class ObsServiceSamplesUtils
         }
     }
     
-//    /**测试获取桶存储策略
-//     * 
-//     * @param service MosService服务对象
-//     * @param bucketName 桶名称
-//     */
-//    public static void bucketGetStoragePolicy(MosService service, String bucketName)
-//    {
-//        try
-//        {
-//            StoragePolicy policy = service.getBucketStoragePolicy(bucketName);
-//            System.out.println("get bucket storagePolicy :" + policy.getStoragePolicyName());
-//        }
-//        catch (ObsException e)
-//        {
-//            System.out.println("get bucket storagePolicy failed. " + e.getErrorMessage() + " response code :"
-//                + e.getResponseCode());
-//        }
-//    }
+    //    /**测试获取桶存储策略
+    //     * 
+    //     * @param service MosService服务对象
+    //     * @param bucketName 桶名称
+    //     */
+    //    public static void bucketGetStoragePolicy(MosService service, String bucketName)
+    //    {
+    //        try
+    //        {
+    //            StoragePolicy policy = service.getBucketStoragePolicy(bucketName);
+    //            System.out.println("get bucket storagePolicy :" + policy.getStoragePolicyName());
+    //        }
+    //        catch (ObsException e)
+    //        {
+    //            System.out.println("get bucket storagePolicy failed. " + e.getErrorMessage() + " response code :"
+    //                + e.getResponseCode());
+    //        }
+    //    }
     
-//    /**测试修改桶存储策略
-//     * 
-//     * @param service MosService服务对象
-//     * @param bucketName 桶名称
-//     */
-//    public static void bucketSetStoragePolicy(MosService service, String bucketName)
-//    {
-//        StoragePolicy storagePolicy = new StoragePolicy();
-//        storagePolicy.setStoragePolicyName("MDCPOLICY00");
-//        try
-//        {
-//            service.setBucketStoragePolicy(bucketName, storagePolicy);
-//            System.out.println("set bucket storagePolicy success.");
-//        }
-//        catch (ObsException e)
-//        {
-//            System.out.println("set bucket storagePolicy failed. " + e.getErrorMessage() + " response code :"
-//                + e.getResponseCode());
-//        }
-//    }
+    //    /**测试修改桶存储策略
+    //     * 
+    //     * @param service MosService服务对象
+    //     * @param bucketName 桶名称
+    //     */
+    //    public static void bucketSetStoragePolicy(MosService service, String bucketName)
+    //    {
+    //        StoragePolicy storagePolicy = new StoragePolicy();
+    //        storagePolicy.setStoragePolicyName("MDCPOLICY00");
+    //        try
+    //        {
+    //            service.setBucketStoragePolicy(bucketName, storagePolicy);
+    //            System.out.println("set bucket storagePolicy success.");
+    //        }
+    //        catch (ObsException e)
+    //        {
+    //            System.out.println("set bucket storagePolicy failed. " + e.getErrorMessage() + " response code :"
+    //                + e.getResponseCode());
+    //        }
+    //    }
     
     private static void ownerDisplay(Owner owner)
     {
@@ -322,7 +320,6 @@ public class ObsServiceSamplesUtils
         }
     }
     
-    
     /**测试删除桶操作
      * 
      * @param service MosService服务对象
@@ -341,7 +338,7 @@ public class ObsServiceSamplesUtils
                 + e.getResponseCode());
         }
     }
-
+    
     private static void objectDisplay(S3Object object)
     {
         System.out.println("object :" + object.getObjectKey());
@@ -361,15 +358,14 @@ public class ObsServiceSamplesUtils
             System.out.println("List objects :");
             while (itr.hasNext())
             {
-                S3Object objectTmp = (S3Object) itr.next();
+                S3Object objectTmp = (S3Object)itr.next();
                 objectDisplay(objectTmp);
             }
             
         }
         catch (ObsException e)
         {
-            System.out
-                .println("List objects failed. " + e.getErrorMessage() + " response code :" + e.getResponseCode());
+            System.out.println("List objects failed. " + e.getErrorMessage() + " response code :" + e.getResponseCode());
         }
     }
     
@@ -383,7 +379,7 @@ public class ObsServiceSamplesUtils
     {
         String greeting = "Hello World!";
         ObjectMetadata metadata = new ObjectMetadata();
-        metadata.setContentLength((long) greeting.getBytes().length);
+        metadata.setContentLength((long)greeting.getBytes().length);
         metadata.setContentType("text/plain");
         ByteArrayInputStream input = new ByteArrayInputStream(greeting.getBytes());
         try
@@ -407,7 +403,7 @@ public class ObsServiceSamplesUtils
     {
         try
         {
-            service.deleteObject(bucketName, objectKey,null);
+            service.deleteObject(bucketName, objectKey, null);
             System.out.println("Delete object success.");
         }
         catch (ObsException e)
@@ -450,24 +446,24 @@ public class ObsServiceSamplesUtils
      */
     public static void objectGetTest(ObsClient service, String bucketName, String objectKey)
     {
-//        try
-//        {
-//            S3Object object = service.getObject(bucketName, objectKey);
-//            try
-//            {
-//                object.getObjectContent().close();
-//            }
-//            catch (IOException e)
-//            {
-//                e.printStackTrace();
-//            }
-//            System.out.println("Get object :");
-//            objectDisplay(object);
-//        }
-//        catch (ObsException e)
-//        {
-//            System.out.println("Get object failed. " + e.getErrorMessage() + " response code :" + e.getResponseCode());
-//        }
+        //        try
+        //        {
+        //            S3Object object = service.getObject(bucketName, objectKey);
+        //            try
+        //            {
+        //                object.getObjectContent().close();
+        //            }
+        //            catch (IOException e)
+        //            {
+        //                e.printStackTrace();
+        //            }
+        //            System.out.println("Get object :");
+        //            objectDisplay(object);
+        //        }
+        //        catch (ObsException e)
+        //        {
+        //            System.out.println("Get object failed. " + e.getErrorMessage() + " response code :" + e.getResponseCode());
+        //        }
     }
     
     /**测试查看对象元数据
@@ -478,21 +474,21 @@ public class ObsServiceSamplesUtils
      */
     public static void objectMetaGetTest(ObsClient service, String bucketName, String objectKey)
     {
-//        try
-//        {
-//            ObjectMetadata objectMeta = service.getObjectMetadata(bucketName, objectKey);
-//            System.out.println("Get object metadata :");
-//            System.out.println("object Name :" + objectKey);
-//            System.out.println("eTag :" + objectMeta.getEtag());
-//            System.out.println("Date :" + objectMeta.getLastModified());
-//            System.out.println("contentType :" + objectMeta.getContentType());
-//            System.out.println("contentLength :" + objectMeta.getContentLength());
-//        }
-//        catch (ObsException e)
-//        {
-//            System.out.println("Get object metadata failed. " + e.getErrorMessage() + " response code :"
-//                + e.getResponseCode());
-//        }
+        //        try
+        //        {
+        //            ObjectMetadata objectMeta = service.getObjectMetadata(bucketName, objectKey);
+        //            System.out.println("Get object metadata :");
+        //            System.out.println("object Name :" + objectKey);
+        //            System.out.println("eTag :" + objectMeta.getEtag());
+        //            System.out.println("Date :" + objectMeta.getLastModified());
+        //            System.out.println("contentType :" + objectMeta.getContentType());
+        //            System.out.println("contentLength :" + objectMeta.getContentLength());
+        //        }
+        //        catch (ObsException e)
+        //        {
+        //            System.out.println("Get object metadata failed. " + e.getErrorMessage() + " response code :"
+        //                + e.getResponseCode());
+        //        }
     }
     
     /**测试获取对象ACL
@@ -536,7 +532,7 @@ public class ObsServiceSamplesUtils
         hwAcl.grantPermission(groupGrant, Permission.PERMISSION_READ);
         try
         {
-            service.setObjectAcl(bucketName, objectKey, hwAcl,null);
+            service.setObjectAcl(bucketName, objectKey, hwAcl, null);
             System.out.println("set object acl success.");
         }
         catch (ObsException e)
@@ -568,44 +564,33 @@ public class ObsServiceSamplesUtils
         }
     }
     
-//    /**测试创建临时授权方式的URL
-//     * 
-//     * @param service MosService服务对象
-//     * @param bucketDstName 桶名称
-//     * @param objectKey 对象名称
-//     */
-//    private static void createSignedUrlTest(MosService service, String bucketName, String objectKey)
-//    {
-//        final long offsetTime = 60000L;
-//        Date expiryTime = new Date(System.currentTimeMillis() + offsetTime);
-//        try
-//        {
-//            String url = service.createSignedGetObjectListUrl(bucketName, expiryTime);
-//            System.out.println("SignedGetObjectListUrl :" + url);
-//
-//            url = service.createSignedGetObjectUrl(bucketName, objectKey, expiryTime);
-//            System.out.println("SignedGetObjectUrl :" + url);
-//            
-//            url = service.createSignedHeadObjectUrl(bucketName, objectKey, expiryTime);
-//            System.out.println("SignedHeadObjectUrl :" + url);
-//
-//            url = service.createSignedGetBucketAclUrl(bucketName, expiryTime);
-//            System.out.println("SignedGetBucketAclUrl :" + url);
-//            
-//            url = service.createSignedPutBucketAclUrl(bucketName, expiryTime);
-//            System.out.println("SignedPutBucketAclUrl :" + url);
-//
-//            url = service.createSignedGetObjectAclUrl(bucketName, objectKey, expiryTime);
-//            System.out.println("SignedGetObjectAclUrl :" + url);
-//
-//            url = service.createSignedPutObjectAclUrl(bucketName, objectKey, expiryTime);
-//            System.out.println("SignedPutObjectAclUrl :" + url);
-//        }
-//        catch (ObsException e)
-//        {
-//            System.out.println("create signed url failed.");
-//        }
-//    }
+    /**
+     * 测试创建临时授权方式的URL
+     * 
+     * @param service
+     *            MosService服务对象
+     * @param bucketDstName
+     *            桶名称
+     * @param objectKey
+     *            对象名称
+     */
+    private static void createSignedUrlTest(ObsClient service, String bucketName, String objectKey)
+    {
+        final long offsetTime = 600000L;
+        Date expiryTime = new Date(System.currentTimeMillis() + offsetTime);
+        try
+        {
+            
+            String signedUrl = service.createSignedUrl(HttpMethodEnum.GET, bucketName, objectKey, null, expiryTime);
+            
+            System.err.println(signedUrl);
+        }
+        catch (ObsException e)
+        {
+            System.out.println("create signed url failed.");
+        }
+        
+    }
     
     /**测试多段方式上传对象
      * 
@@ -615,7 +600,7 @@ public class ObsServiceSamplesUtils
      */
     public static void multipartTest(ObsClient service, String bucketName, String objectKey)
     {
-        final int partNumber = 2;
+        //        final int partNumber = 2;
         InitiateMultipartUploadResult uploadInfo = null;
         InitiateMultipartUploadRequest request = new InitiateMultipartUploadRequest();
         request.setBucketName(bucketName);
@@ -638,14 +623,14 @@ public class ObsServiceSamplesUtils
         
         UploadPartRequest requestUpload = null;//new UploadPartRequest();
         
-        requestUpload.setBucketName(bucketName);
-        requestUpload.setObjectKey(objectKey);
-        requestUpload.setPartNumber(1);
-        String greeting = "Hello zlw!";
-        ByteArrayInputStream input = new ByteArrayInputStream(greeting.getBytes());
-        requestUpload.setPartSize(Long.valueOf(greeting.getBytes().length));
-//        requestUpload.setInputStream(input);
-        requestUpload.setUploadId(uploadInfo.getUploadId());
+        //        requestUpload.setBucketName(bucketName);
+        //        requestUpload.setObjectKey(objectKey);
+        //        requestUpload.setPartNumber(1);
+        //        String greeting = "Hello zlw!";
+        ////        ByteArrayInputStream input = new ByteArrayInputStream(greeting.getBytes());
+        //        requestUpload.setPartSize(Long.valueOf(greeting.getBytes().length));
+        //        //        requestUpload.setInputStream(input);
+        //        requestUpload.setUploadId(uploadInfo.getUploadId());
         try
         {
             UploadPartResult result = service.uploadPart(requestUpload);
@@ -725,14 +710,14 @@ public class ObsServiceSamplesUtils
         
         UploadPartRequest requestUpload = null;//new UploadPartRequest();
         
-        requestUpload.setBucketName(bucketName);
-        requestUpload.setObjectKey(objectKey);
-        requestUpload.setPartNumber(1);
-        String greeting = "Hello zlw!";
-        ByteArrayInputStream input = new ByteArrayInputStream(greeting.getBytes());
-        requestUpload.setPartSize(Long.valueOf(greeting.getBytes().length));
-//        requestUpload.setInputStream(input);
-        requestUpload.setUploadId(uploadInfo.getUploadId());
+        //        requestUpload.setBucketName(bucketName);
+        //        requestUpload.setObjectKey(objectKey);
+        //        requestUpload.setPartNumber(1);
+        //        String greeting = "Hello zlw!";
+        //        ByteArrayInputStream input = new ByteArrayInputStream(greeting.getBytes());
+        //        requestUpload.setPartSize(Long.valueOf(greeting.getBytes().length));
+        //        //        requestUpload.setInputStream(input);
+        //        requestUpload.setUploadId(uploadInfo.getUploadId());
         try
         {
             service.uploadPart(requestUpload);
@@ -775,9 +760,9 @@ public class ObsServiceSamplesUtils
     public static void main(String[] args)
     {
         ObsClient service;
-        final String bucketName = "bucketzlw001";
-        final String objectKey = "object002";
-        final String newObjectKey = "object000";
+        final String bucketName = "bucket";
+        final String objectKey = "object";
+        //        final String newObjectKey = "object000";
         final int httpPort = 5080;
         try
         {
@@ -787,43 +772,42 @@ public class ObsServiceSamplesUtils
             config.setEndpointHttpPort(httpPort);
             config.setDisableDnsBucket(true);
             service = new ObsClient("DF040F692AA69F0EEC55", "ffkZzMmozB4EzQr0r3HxNItX1pgAAAFLKqafDuId", config);
-
+            
             System.out.println("===========TEST START===========");
-
-            bucketCreateTest(service, bucketName);
-            bucketListTest(service);
-            bucketGetStorageInfoTest(service, bucketName);
-            bucketGetLocationTest(service, bucketName);
-            bucketSetQuotaTest(service, bucketName);
-            bucketGetQuotaTest(service, bucketName);
-            bucketSetAcl(service, bucketName);
-            bucketGetAcl(service, bucketName);
-            // In Single DC, the action setStoragePolicy is invalid.
-            // bucketSetStoragePolicy(service, bucketName);
-            // In Single DC, the action getStoragePolicy is invalid.
-            // bucketGetStoragePolicy(service, bucketName);
-            objectPutTest(service, bucketName, objectKey);
-            objectCopyTest(service, bucketName, objectKey, bucketName, newObjectKey);
-            objectGetTest(service, bucketName, objectKey);
-            objectMetaGetTest(service, bucketName, objectKey);
-            objectListTest(service, bucketName);
-            objectGetAcl(service, bucketName, objectKey);
-            objectSetAcl(service, bucketName, objectKey);
-//            createSignedUrlTest(service, bucketName, objectKey);
-            multipartTest(service, bucketName, objectKey);
-            multipartCompleteTest(service, bucketName, objectKey);
-            // test deleting
-            objectDeleteTest(service, bucketName, objectKey);
-            objectDeleteTest(service, bucketName, newObjectKey);
-            bucketDeleteTest(service, bucketName);
-
+            
+            //                    bucketCreateTest(service, bucketName);
+            //                    bucketListTest(service);
+            //                    bucketGetStorageInfoTest(service, bucketName);
+            //                    bucketGetLocationTest(service, bucketName);
+            //                    bucketSetQuotaTest(service, bucketName);
+            //                    bucketGetQuotaTest(service, bucketName);
+            //                    bucketSetAcl(service, bucketName);
+            //                    bucketGetAcl(service, bucketName);
+            //                    // In Single DC, the action setStoragePolicy is invalid.
+            //                    // bucketSetStoragePolicy(service, bucketName);
+            //                    // In Single DC, the action getStoragePolicy is invalid.
+            //                    // bucketGetStoragePolicy(service, bucketName);
+            //                    objectPutTest(service, bucketName, objectKey);
+            //                    objectCopyTest(service, bucketName, objectKey, bucketName, newObjectKey);
+            //                    objectGetTest(service, bucketName, objectKey);
+            //                    objectMetaGetTest(service, bucketName, objectKey);
+            //                    objectListTest(service, bucketName);
+            //                    objectGetAcl(service, bucketName, objectKey);
+            //                    objectSetAcl(service, bucketName, objectKey);
+            //                    createSignedUrlTest(service, bucketName, objectKey);
+            //                    multipartTest(service, bucketName, objectKey);
+            //                    multipartCompleteTest(service, bucketName, objectKey);
+            //                    // test deleting
+            //                    objectDeleteTest(service, bucketName, objectKey);
+            //                    objectDeleteTest(service, bucketName, newObjectKey);
+            //                    bucketDeleteTest(service, bucketName);
+            createSignedUrlTest(service, bucketName, objectKey);
             System.out.println("===========TEST END===========");
         }
         catch (ObsException e1)
         {
             e1.printStackTrace();
         }
-        
     }
-
+    
 }

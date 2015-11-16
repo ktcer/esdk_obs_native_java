@@ -31,22 +31,24 @@ import org.jets3t.service.model.S3LifecycleConfiguration;
 import org.jets3t.service.model.S3LifecycleConfiguration.Expiration;
 import org.jets3t.service.model.S3LifecycleConfiguration.Rule;
 import org.jets3t.service.model.S3MultipartUpload;
+import org.jets3t.service.model.S3OptionInfoRequest;
+import org.jets3t.service.model.S3OptionInfoResult;
 import org.jets3t.service.model.S3Owner;
 import org.jets3t.service.model.S3Quota;
 import org.jets3t.service.model.S3StorageInfo;
 import org.jets3t.service.model.S3StoragePolicy;
 import org.jets3t.service.model.S3WebsiteConfiguration;
 import org.jets3t.service.model.SS3Bucket;
+import org.jets3t.service.model.SS3BucketCors;
+import org.jets3t.service.model.SS3CORSRule;
 import org.jets3t.service.model.SS3Object;
 import org.jets3t.service.model.StorageObject;
 import org.jets3t.service.model.StorageOwner;
 //import org.jets3t.service.multi.event.CreateObjectsEvent;
 
-
-
-
 import com.huawei.obs.services.exception.ObsException;
 import com.huawei.obs.services.model.AccessControlList;
+import com.huawei.obs.services.model.BucketCorsRule;
 import com.huawei.obs.services.model.BucketLoggingConfiguration;
 import com.huawei.obs.services.model.BucketQuota;
 import com.huawei.obs.services.model.BucketStorageInfo;
@@ -65,12 +67,15 @@ import com.huawei.obs.services.model.Multipart;
 import com.huawei.obs.services.model.MultipartUpload;
 import com.huawei.obs.services.model.MultipartUploadListing;
 import com.huawei.obs.services.model.ObjectMetadata;
+import com.huawei.obs.services.model.OptionsInfoRequest;
+import com.huawei.obs.services.model.OptionsInfoResult;
 import com.huawei.obs.services.model.Owner;
 import com.huawei.obs.services.model.Permission;
 import com.huawei.obs.services.model.RedirectAllRequest;
 import com.huawei.obs.services.model.RouteRule;
 import com.huawei.obs.services.model.RouteRuleCondition;
 import com.huawei.obs.services.model.S3Bucket;
+import com.huawei.obs.services.model.S3BucketCors;
 import com.huawei.obs.services.model.S3Object;
 import com.huawei.obs.services.model.StoragePolicy;
 import com.huawei.obs.services.model.UploadPartResult;
@@ -779,13 +784,15 @@ public class Convert
     {
         ObsException exception;
         // 主要是考虑空指针，网络超时等其他异常
-        if(!(se.getCause() instanceof ServiceException) && null == se.getErrorMessage())
-        {
-            String errorMessage = se.getMessage();
-            exception = new ObsException(errorMessage);
-            exception.setErrorMessage(errorMessage);
-        }
-        else if (se.getResponseCode() < 0)
+//        if(!(se.getCause() instanceof ServiceException) && null == se.getErrorMessage())
+//        {
+//            String errorMessage = se.getMessage();
+//            exception = new ObsException(errorMessage);
+//            exception.setErrorMessage(errorMessage);
+//            exception.setResponseCode(se.getResponseCode());
+//            exception.setResponseStatus(se.getResponseStatus());
+//        }
+        if (se.getResponseCode() < 0)
         {
             exception = new ObsException("OBS servcie Error Message. "
                     + se.getMessage());
@@ -795,7 +802,7 @@ public class Convert
             exception = new ObsException("OBS servcie Error Message.",
                     se.getXmlMessage());
             exception.setErrorCode(se.getErrorCode());
-            exception.setErrorMessage(se.getErrorMessage());
+            exception.setErrorMessage(se.getErrorMessage()== null ?se.getMessage():se.getErrorMessage());
             exception.setErrorRequestId(se.getErrorRequestId());
             exception.setErrorHostId(se.getErrorHostId());
             exception.setResponseCode(se.getResponseCode());
@@ -935,6 +942,85 @@ public class Convert
         return s3Objects;
     }
     
+    public static BucketCorsRule changFromSS3BucketCorsRule(SS3CORSRule s3cors)
+    {
+        BucketCorsRule bucketCors =  new BucketCorsRule();
+        if(s3cors != null){
+            bucketCors.setId(s3cors.getId());
+            bucketCors.setAllowedHeader(s3cors.getAllowedHeaders());
+            bucketCors.setAllowedMethod(s3cors.getAllowedMethods());
+            bucketCors.setAllowedOrigin(s3cors.getAllowedOrigins());
+            bucketCors.setMaxAgeSecond(s3cors.getMaxAgeSeconds());
+            bucketCors.setExposeHeader(s3cors.getExposedHeaders());
+        }
+        return bucketCors;
+    }
+    
+    public static SS3CORSRule changeToSS3CORSRule(BucketCorsRule corsRule)
+    {
+        SS3CORSRule cors = new SS3CORSRule();
+        if (corsRule != null){
+            cors.setId(corsRule.getId());
+            cors.setAllowedHeaders(corsRule.getAllowedHeader());
+            cors.setAllowedMethods(corsRule.getAllowedMethod());
+            cors.setAllowedOrigins(corsRule.getAllowedOrigin());
+            cors.setExposedHeaders(corsRule.getExposeHeader());
+        }
+        return cors;
+    }
+    
+    public static S3BucketCors changFromSS3BucketCors(SS3BucketCors s3cors)
+    {
+        S3BucketCors s3BucketCors = new S3BucketCors();
+        List<BucketCorsRule> rules = new ArrayList<BucketCorsRule>();
+        List<SS3CORSRule> ss3Rules = s3cors.getRules();
+        for (int i = 0; i < ss3Rules.size(); i++)
+        {
+            BucketCorsRule rule = changFromSS3BucketCorsRule(ss3Rules.get(i));
+            rules.add(rule);
+        }
+        s3BucketCors.setRules(rules);
+        return s3BucketCors;
+    }
+    
+    public static SS3BucketCors changeToSS3BucketCors(S3BucketCors s3BucketCors)
+    {
+        SS3BucketCors sS3BucketCors = new SS3BucketCors();
+        List<SS3CORSRule> ss3Rules = new ArrayList<SS3CORSRule>();
+        List<BucketCorsRule> s3Rules =s3BucketCors.getRules();
+        for (int i = 0; i < s3Rules.size(); i++)
+        {
+            SS3CORSRule ss3CORSRule = changeToSS3CORSRule(s3Rules.get(i));
+            ss3Rules.add(ss3CORSRule);
+        }
+        sS3BucketCors.setRules(ss3Rules);
+        return sS3BucketCors;
+    }
+    
+    public static OptionsInfoResult changeFromSS3Options(S3OptionInfoResult S3option)
+    {
+        OptionsInfoResult option = new OptionsInfoResult();
+        if(S3option != null){
+            option.setAllowOrigin(S3option.getAllowOrigin());
+            option.setMaxAge(S3option.getMaxAge());
+            option.setAllowHeaders(S3option.getAllowHeaders());
+            option.setAllowMethods(S3option.getAllowMethods());
+            option.setExposeHeaders(S3option.getExposeHeaders()); 
+        }
+        return option;
+    }
+    
+    public static S3OptionInfoRequest changeToS3Options(OptionsInfoRequest option)
+    {
+        S3OptionInfoRequest S3option = new  S3OptionInfoRequest();
+        if(option != null){
+            S3option.setOrigin(option.getOrigin());
+            S3option.setRequestHeaders(option.getRequestHeaders());
+            S3option.setRequestMethod(option.getRequestMethod());
+        }
+        return S3option;
+    }
+   
     /**
      * @param threadWatcher
      * @return 不会为NULL 但是线程可能为0
