@@ -35,6 +35,7 @@ import org.jets3t.service.model.S3Version;
  *
  * @author James Murty
  */
+@SuppressWarnings("all")
 public class DeleteVersionedObjectsEvent extends ServiceEvent {
     private S3Version[] versions = null;
 

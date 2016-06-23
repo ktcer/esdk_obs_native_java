@@ -41,6 +41,7 @@ import org.jets3t.service.multi.ThreadedStorageService;
  * @author James Murty
  */
 public class CopyObjectsEvent extends ServiceEvent {
+    @SuppressWarnings("rawtypes")
     private Map[] results = null;
     private StorageObject[] copyCancelledObjects = null;
     private StorageObject[] destinationObjects = null;
@@ -63,6 +64,7 @@ public class CopyObjectsEvent extends ServiceEvent {
         return event;
     }
 
+    @SuppressWarnings("rawtypes")
     public static CopyObjectsEvent newInProgressEvent(ThreadWatcher threadWatcher,
         Map[] completedResults, Object uniqueOperationId)
     {
@@ -96,6 +98,7 @@ public class CopyObjectsEvent extends ServiceEvent {
         return event;
     }
 
+    @SuppressWarnings("rawtypes")
     private void setResults(Map[] results) {
         this.results = results;
     }
@@ -118,6 +121,7 @@ public class CopyObjectsEvent extends ServiceEvent {
      * @throws IllegalStateException
      * results are only available from EVENT_IN_PROGRESS events.
      */
+    @SuppressWarnings("rawtypes")
     public Map[] getCopyResults() throws IllegalStateException {
         if (getEventCode() != EVENT_IN_PROGRESS) {
             throw new IllegalStateException(

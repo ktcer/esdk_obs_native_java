@@ -38,6 +38,7 @@ import org.jets3t.service.model.SS3Object;
  *
  * @author James Murty
  */
+@SuppressWarnings("all")
 public class CopyObjectsEvent extends ServiceEvent {
     private Map[] results = null;
     private SS3Object[] copyCancelledObjects = null;

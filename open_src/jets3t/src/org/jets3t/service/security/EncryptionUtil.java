@@ -35,7 +35,6 @@ import java.security.SignatureException;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.spec.AlgorithmParameterSpec;
 import java.security.spec.InvalidKeySpecException;
-import java.security.spec.KeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -49,8 +48,6 @@ import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
-import javax.crypto.spec.DESedeKeySpec;
-import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.PBEParameterSpec;
 
@@ -69,6 +66,7 @@ import org.jets3t.service.utils.ServiceUtils;
  *
  * @author James Murty
  */
+@SuppressWarnings("all")
 public class EncryptionUtil {
     private static final Log log = LogFactory.getLog(EncryptionUtil.class);
 

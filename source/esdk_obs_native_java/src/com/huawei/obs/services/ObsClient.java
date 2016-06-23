@@ -1,13 +1,18 @@
-/*
- * Copyright Notice:
- *      Copyright  1998-2015, Huawei Technologies Co., Ltd.  ALL Rights Reserved.
- *
- *      Warning: This computer software sourcecode is protected by copyright law
- *      and international treaties. Unauthorized reproduction or distribution
- *      of this sourcecode, or any portion of it, may result in severe civil and
- *      criminal penalties, and will be prosecuted to the maximum extent
- *      possible under the law.
- */
+/**
+* Copyright 2015 Huawei Technologies Co., Ltd. All rights reserved.
+* eSDK is licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*    http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
+
 package com.huawei.obs.services;
 
 import java.io.File;
@@ -16,6 +21,7 @@ import java.io.InputStream;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -159,23 +165,18 @@ public class ObsClient
     /**
      * 创建临时授权
      * 
-     * @param method
-     *            Http请求方式
-     * @param bucketName
-     *            桶名
-     * @param objectKey
-     *            对象名
-     * @param specialParam
-     *            特殊请求参数
-     * @param expiryTime
-     *            临时授权的有效时间
+     * @param method Http请求方式
+     * @param bucketName 桶名
+     * @param objectKey 对象名
+     * @param specialParam 特殊请求参数
+     * @param expiryTime 临时授权的有效时间
      * @return 临时授权URL
      * @throws ObsException SDK自定义异常（表示SDK或服务器不能正常处理业务时返回的信息。包括对应请求的描述信息及不能正常处理的原因和错误码）
      * @since eSDK Storage 1.5.30
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "bucket"; <br/>
@@ -183,12 +184,13 @@ public class ObsClient
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         //设置临时授权的有效时间<br/>
-     *         final long offsetTime = 600000L;;<br/>
+     *         final long offsetTime = 600000L;<br/>
      *         Date expiryTime = new Date(System.currentTimeMillis() + offsetTime);<br/>
      *         <p>
      *         try<br/>
@@ -215,7 +217,6 @@ public class ObsClient
         InterfaceLogBean reqBean = new InterfaceLogBean("createSignedUrl", s3Service.getEndpoint(), "");
         String param = (null == specialParam ? null : specialParam.getStringCode());
         String httpMethod = (null == method ? null : method.getStringCode());
-        
         try
         {
             runningLog.debug("createSignedUrl", "HttpMethod: " + httpMethod + ", bucketName: " + bucketName
@@ -223,13 +224,17 @@ public class ObsClient
             ProviderCredentials credentials =
                 new AWSCredentials(s3Service.getAWSCredentials().getAccessKey(), s3Service.getAWSCredentials()
                     .getSecretKey());
+            credentials.setSignat(config.getSignatString().toLowerCase());
+            credentials.setRegion(config.getDefaultBucketLocation());
             long secondsSinceEpoch = expiryTime.getTime() / 1000;
+            Map<String, Object> headers = new HashMap<String, Object>();
+            headers.put("Host", config.getEndPoint());
             String signedUrl =
                 s3Service.createSignedUrl(httpMethod,
                     bucketName,
                     objectKey,
                     param,
-                    null,
+                    headers,
                     credentials,
                     secondsSinceEpoch,
                     false,
@@ -300,16 +305,17 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket001"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<br/>
@@ -390,7 +396,7 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket001";<br/>
@@ -398,9 +404,10 @@ public class ObsClient
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<br/>
@@ -472,16 +479,17 @@ public class ObsClient
      * @sample ObsClient obsClient;<br/>
      *         ObsConfiguration config;<br/>
      *         final String endPoint = "129.4.234.2"; //存储服务器地址<br/>
-     *         final int httpPort = 5080; //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443; //HTTP请求对应的端口<br/>
      *         final String ak = "DF040F692AA69F0EEC55"; //接入证书<br/>
      *         final String sk = "ffkZzMmozB4EzQr0r3HxNItX1pgAAAFLKqafDuId";
      *         //安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<p>
@@ -550,16 +558,17 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket002"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<br/>
@@ -611,15 +620,16 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<br/>
@@ -696,16 +706,17 @@ public class ObsClient
      * @sample ObsClient obsClient;<br/>
      *         ObsConfiguration config;<br/>
      *         final String endPoint = "129.4.234.2"; //存储服务器地址<br/>
-     *         final int httpPort = 5080; //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443; //HTTP请求对应的端口<br/>
      *         final String ak = "DF040F692AA69F0EEC55"; //接入证书<br/>
      *         final String sk = "ffkZzMmozB4EzQr0r3HxNItX1pgAAAFLKqafDuId";
      *         //安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<p>
@@ -773,16 +784,17 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket001"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<br/>
@@ -860,9 +872,9 @@ public class ObsClient
      *      <li>public-read 桶或对象的所有者拥有完全控制的权限，其他所有用户包括匿名用户拥有读的权限。</li>
      *      <li>public-read-write 桶或对象的所有者拥有完全控制的权限，其他所有用户包括匿名用户拥有读和写的权限。</li>
      *      <li>authenticated-read 桶或对象的所有者拥有完全控制的权限，其他OBS授权用户拥有读权限。</li>
-     *      <li>bucketowner-read 对象的所有者拥有完全控制的权限，桶的所有者拥有只读的权限。</li>
-     *      <li>bucket-ownerfull-control 对象的所有者拥有完全控制的权限，桶的所有者拥有完全控制的权限。</li>
-     *      <li>log-deliverywrite 日志投递用户组拥有对桶的写权限以及读ACP的权限。</li>
+     *      <li>bucket-owner-read 对象的所有者拥有完全控制的权限，桶的所有者拥有只读的权限。</li>
+     *      <li>bucket-owner-full-control 对象的所有者拥有完全控制的权限，桶的所有者拥有完全控制的权限。</li>
+     *      <li>log-delivery-write 日志投递用户组拥有对桶的写权限以及读ACP的权限。</li>
      *  </ul>
      *  </b>
      * @throws ObsException SDK自定义异常（表示SDK或服务器不能正常处理业务时返回的信息。包括对应请求的描述信息及不能正常处理的原因和错误码）
@@ -870,15 +882,16 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         </p>
      *         try<br/>
      *         {<br/>
@@ -958,16 +971,17 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket001"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<br/>
@@ -1021,16 +1035,17 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket001"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/> 
      *         {<br/>
@@ -1085,16 +1100,17 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket001"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<br/>
@@ -1150,16 +1166,17 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket001"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         final long quota = 512L;<br/>
      *         BucketQuota bucketQuota = new BucketQuota();<br/>
@@ -1215,16 +1232,17 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket001"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         S3BucketCors s3BucketCors = new S3BucketCors();<br/>
      *  
@@ -1302,16 +1320,17 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket001"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         <p>
      *         try<br/>
@@ -1368,16 +1387,17 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket001"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         try<br/>
      *         {<br/>
      *         &nbsp;&nbsp;&nbsp;&nbsp;  //实例化ObsClient服务<br/>
@@ -1430,22 +1450,23 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket001"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         try<br/>
      *         {<br/>
      *         &nbsp;&nbsp;&nbsp;&nbsp;  //实例化ObsClient服务<br/>
      *         &nbsp;&nbsp;&nbsp;&nbsp;  obsClient = new ObsClient(ak, sk, config);<br/>
-     *         &nbsp;&nbsp;&nbsp;&nbsp;  //调用ObsClient的OptionBucket接口<br/>
-     *         &nbsp;&nbsp;&nbsp;&nbsp;  <B>obsClient.optionBucket(bucketName);</B><br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  //调用ObsClient的OptionsBucket接口<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  <B>obsClient.optionsBucket(bucketName);</B><br/>
      *         &nbsp;&nbsp;&nbsp;&nbsp;  System.out.println("option bucket success.");<br/>
      *         }<br/>
      *         catch (ObsException e)<br/>
@@ -1454,14 +1475,14 @@ public class ObsClient
      *         &nbsp;&nbsp;&nbsp;&nbsp; + e.getResponseCode());<br/>
      *         }<br/>
      */
-    public OptionsInfoResult optionBucket(String bucketName, OptionsInfoRequest optionInfo)
+    public OptionsInfoResult optionsBucket(String bucketName, OptionsInfoRequest optionInfo)
         throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("OptionBucket", s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("OptionsBucket", s3Service.getEndpoint(), "");
         OptionsInfoResult output = null;
         try
         {
-            runningLog.debug("OptionBucket", "bucketName: " + bucketName);
+            runningLog.debug("OptionsBucket", "bucketName: " + bucketName);
             
             S3OptionInfoRequest s3option = Convert.changeToS3Options(optionInfo);
             S3OptionInfoResult s3output = s3Service.optionBucket(bucketName, s3option);
@@ -1476,7 +1497,7 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("OptionBucket",
+            runningLog.error("OptionsBucket",
                 "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
@@ -1496,22 +1517,23 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket001"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         try<br/>
      *         {<br/>
      *         &nbsp;&nbsp;&nbsp;&nbsp;  //实例化ObsClient服务<br/>
      *         &nbsp;&nbsp;&nbsp;&nbsp;  obsClient = new ObsClient(ak, sk, config);<br/>
-     *         &nbsp;&nbsp;&nbsp;&nbsp;  //调用ObsClient的OptionObject接口<br/>
-     *         &nbsp;&nbsp;&nbsp;&nbsp;  <B>obsClient.optionObject(bucketName,objectKey,optionInfo);</B><br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  //调用ObsClient的OptionsObject接口<br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  <B>obsClient.optionsObject(bucketName,objectKey,optionInfo);</B><br/>
      *         &nbsp;&nbsp;&nbsp;&nbsp;  System.out.println("option object success.");<br/>
      *         }<br/>
      *         catch (ObsException e)<br/>
@@ -1520,14 +1542,14 @@ public class ObsClient
      *         &nbsp;&nbsp;&nbsp;&nbsp; + e.getResponseCode());<br/>
      *         }<br/>
      */
-    public OptionsInfoResult optionObject(String bucketName, String objectKey, OptionsInfoRequest optionInfo)
+    public OptionsInfoResult optionsObject(String bucketName, String objectKey, OptionsInfoRequest optionInfo)
         throws ObsException
     {
-        InterfaceLogBean reqBean = new InterfaceLogBean("OptionObject", s3Service.getEndpoint(), "");
+        InterfaceLogBean reqBean = new InterfaceLogBean("OptionsObject", s3Service.getEndpoint(), "");
         OptionsInfoResult output = null;
         try
         {
-            runningLog.debug("OptionObject", "bucketName: " + bucketName);
+            runningLog.debug("OptionsObject", "bucketName: " + bucketName);
             
             S3OptionInfoRequest s3option = Convert.changeToS3Options(optionInfo);
             S3OptionInfoResult s3output = s3Service.optionObject(bucketName, objectKey, s3option);
@@ -1542,7 +1564,7 @@ public class ObsClient
             reqBean.setRespTime(new Date());
             reqBean.setResultCode(e.getErrorCode());
             ilog.error(reqBean);
-            runningLog.error("OptionObject",
+            runningLog.error("OptionsObject",
                 "Exception:" + (null == e.getXmlMessage() ? e.getMessage() : e.getXmlMessage()));
             throw Convert.changeFromS3Exception(e);
         }
@@ -1647,16 +1669,17 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket001"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<br/>
@@ -1728,16 +1751,17 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket001"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         //设置日志管理配置信息<br/>
      *         BucketLoggingConfiguration loggingConfig = new BucketLoggingConfiguration();<br/>
@@ -1829,15 +1853,16 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
      *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         </p>
      *         try<br/>
      *         {<br/>
@@ -1896,15 +1921,16 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         </p>
      *         try<br/>
      *         {<br/>
@@ -1966,16 +1992,17 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "image-bucket"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         </p>
      *         try<br/>
      *         {<br/>
@@ -2005,7 +2032,7 @@ public class ObsClient
                     maxKeys,
                     keyMarker,
                     nextVersionIdMarker,
-                    true);
+                    false);
             ListVersionsResult result = Convert.changeFromS3ListVersionsResult(markersChunk);
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
@@ -2037,16 +2064,17 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket001"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<br/>
@@ -2128,16 +2156,17 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket001"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<br/>
@@ -2201,16 +2230,17 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket001"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<br/>
@@ -2264,16 +2294,17 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket001"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<br/>
@@ -2330,16 +2361,17 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket001"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         String policy = "{\"Id\": \"Policy1375342051334\", " <br/>
      *         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; + "\"Statement\": [{" <br/>
@@ -2404,16 +2436,17 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket001"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<br/>
@@ -2470,16 +2503,17 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket001"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<br/>
@@ -2531,15 +2565,16 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         </p>
      *         try<br/>
      *         {<br/>
@@ -2617,15 +2652,16 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         </p>
      *         try<br/>
      *         {<br/>
@@ -2701,15 +2737,16 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         </p>
      *         try<br/>
      *         {<br/>
@@ -2776,15 +2813,16 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         String bucketName = "testbucket002"; <br/>
      *         String objectKey = "testobject001";<br/>
@@ -2883,16 +2921,17 @@ public class ObsClient
      * @sample ObsClient obsClient;<br/>
      *         ObsConfiguration config;<br/>
      *         final String endPoint = "129.4.234.2"; //存储服务器地址<br/>
-     *         final int httpPort = 5080; //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443; //HTTP请求对应的端口<br/>
      *         final String ak = "DF040F692AA69F0EEC55"; //接入证书<br/>
      *         final String sk = "ffkZzMmozB4EzQr0r3HxNItX1pgAAAFLKqafDuId";
      *         //安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<p>
@@ -2998,16 +3037,17 @@ public class ObsClient
      * @sample ObsClient obsClient;<br/>
      *         ObsConfiguration config;<br/>
      *         final String endPoint = "129.4.234.2"; //存储服务器地址<br/>
-     *         final int httpPort = 5080; //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443; //HTTP请求对应的端口<br/>
      *         final String ak = "DF040F692AA69F0EEC55"; //接入证书<br/>
      *         final String sk = "ffkZzMmozB4EzQr0r3HxNItX1pgAAAFLKqafDuId";
      *         //安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<p>
@@ -3080,16 +3120,17 @@ public class ObsClient
      * @sample ObsClient obsClient;<br/>
      *         ObsConfiguration config;<br/>
      *         final String endPoint = "129.4.234.2"; //存储服务器地址<br/>
-     *         final int httpPort = 5080; //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443; //HTTP请求对应的端口<br/>
      *         final String ak = "DF040F692AA69F0EEC55"; //接入证书<br/>
      *         final String sk = "ffkZzMmozB4EzQr0r3HxNItX1pgAAAFLKqafDuId";
      *         //安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         </p>
      *                 // 封装请求信息<br/>
         String bucketName = "img-bucket";<br/>
@@ -3193,15 +3234,16 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         String bucketName = "img-bucket";<br/>
      *         String objectKey = "waterlily.jpg";<br/>
@@ -3300,15 +3342,16 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         </p>
      *         try<br/>
      *         {<br/>
@@ -3377,16 +3420,17 @@ public class ObsClient
      * @sample ObsClient obsClient;<br/>
      *         ObsConfiguration config;<br/>
      *         final String endPoint = "129.4.234.2"; //存储服务器地址<br/>
-     *         final int httpPort = 5080; //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443; //HTTP请求对应的端口<br/>
      *         final String ak = "DF040F692AA69F0EEC55"; //接入证书<br/>
      *         final String sk = "ffkZzMmozB4EzQr0r3HxNItX1pgAAAFLKqafDuId";
      *         //安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<p>
@@ -3444,6 +3488,8 @@ public class ObsClient
             objList.setDelimiter(delimiter);
             objList.setMarker(marker);
             objList.setMaxKeys(maxKeys);
+            objList.setNextMarker(obj.getPriorLastKey());
+            objList.setTruncated(null != obj.getPriorLastKey());
             List<String> comPrefixList = new ArrayList<String>(Arrays.asList(obj.getCommonPrefixes()));
             List<S3Object> objectSummaries = new ArrayList<S3Object>();
             for (StorageObject object : obj.getObjects())
@@ -3455,7 +3501,8 @@ public class ObsClient
             runningLog.debug("listObjects",
                 "S3Objects amount: " + objectSummaries.size() + "ObjectListing BucketName: " + objList.getBucketName()
                     + ", Delimiter: " + objList.getDelimiter() + ", Prefix: " + objList.getPrefix() + ", Marker: "
-                    + objList.getMarker() + ", MaxKeys:" + objList.getMaxKeys());
+                    + objList.getMarker() + ", MaxKeys:" + objList.getMaxKeys() + ", NextMarker:"
+                    + (null == objList.getNextMarker() ? "" : objList.getNextMarker()));
             
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
@@ -3483,16 +3530,17 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         String bucketName = "testbucket001"; 
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<br/>
@@ -3530,7 +3578,6 @@ public class ObsClient
             ObjectListing objList = new ObjectListing();
             objList.setBucketName(bucketName);
             List<String> comPrefixList = new ArrayList<String>(Arrays.asList(obj.getCommonPrefixes()));
-            
             List<S3Object> objectSummaries = new ArrayList<S3Object>();
             for (StorageObject object : obj.getObjects())
             {
@@ -3578,15 +3625,16 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         String bucketName = "testbucket002"; <br/>
      *         String objectKey = "testobject001"; 
@@ -3651,15 +3699,16 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         String bucketName = "testbucket002"; <br/>
      *         String objectKey1 = "testobject001"; <br/>
@@ -3743,15 +3792,16 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         String bucketName = "testbucket002"; <br/>
      *         String objectKey = "testobject001"; 
@@ -3833,21 +3883,33 @@ public class ObsClient
      * 
      * @param bucketName 桶名
      * @param objectKey 对象名
-     * @param acl 访问控制列表
+     * @param cannedACL  通过canned ACL的方式来设置桶的ACL。有效值：<br>
+     *  <ul>
+     *      <li>private 桶或对象的所有者拥有完全控制的权限，其他任何人都没有访问权限</li>
+     *      <li>public-read 桶或对象的所有者拥有完全控制的权限，其他所有用户包括匿名用户拥有读的权限。</li>
+     *      <li>public-read-write 桶或对象的所有者拥有完全控制的权限，其他所有用户包括匿名用户拥有读和写的权限。</li>
+     *      <li>authenticated-read 桶或对象的所有者拥有完全控制的权限，其他OBS授权用户拥有读权限。</li>
+     *      <li>bucket-owner-read 对象的所有者拥有完全控制的权限，桶的所有者拥有只读的权限。</li>
+     *      <li>bucket-owner-full-control 对象的所有者拥有完全控制的权限，桶的所有者拥有完全控制的权限。</li>
+     *      <li>log-delivery-write 日志投递用户组拥有对桶的写权限以及读ACP的权限。</li>
+     *  </ul>
+     *  </b>
+     * @param acl ACL(访问控制策略)，acl和cannedACL不能同时使用
      * @throws ObsException SDK自定义异常（表示SDK或服务器不能正常处理业务时返回的信息。包括对应请求的描述信息及不能正常处理的原因和错误码）
      * @since eSDK Storage 1.5.10
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.1";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "D4590CA996A86A393D9B";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "pi68uEEOYGydBNE/b5kNr2A9rNgAAAFMlqhqOaGA";    //存储服务器用户的安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         String bucketName = "testbucket001";<br/>
      *         String objectKey = "testfile.txt";
@@ -3872,7 +3934,7 @@ public class ObsClient
      *         &nbsp;&nbsp;&nbsp;&nbsp;  //实例化ObsClient服务<br/>
      *         &nbsp;&nbsp;&nbsp;&nbsp;  obsClient = new ObsClient(ak, sk, config);<br/>
      *         &nbsp;&nbsp;&nbsp;&nbsp;  //调用ObsClient的setObjectAcl接口<br/>
-     *         &nbsp;&nbsp;&nbsp;&nbsp;  <B>obsClient.setObjectAcl(bucketName, objectKey, acl, null);</B><br/>
+     *         &nbsp;&nbsp;&nbsp;&nbsp;  <B>obsClient.setObjectAcl(bucketName, objectKey, null, acl, null);</B><br/>
      *         &nbsp;&nbsp;&nbsp;&nbsp;  System.out.println("Set object acl success.");<br/>
      *         }<br/>
      *         catch (ObsException e)<br/>
@@ -3881,15 +3943,22 @@ public class ObsClient
      *           + e.getResponseCode());<br/>
      *         }<br/>
      */
-    public void setObjectAcl(String bucketName, String objectKey, AccessControlList acl, String versionId)
+    public void setObjectAcl(String bucketName, String objectKey, String cannedACL, AccessControlList acl,
+        String versionId)
         throws ObsException
     {
         InterfaceLogBean reqBean = new InterfaceLogBean("setObjectAcl", s3Service.getEndpoint(), "");
-        S3AccessControlList s3acl = Convert.changeToS3Acl(acl);
+        
+        S3AccessControlList s3acl = null;
+        if (null != acl)
+        {
+            s3acl = Convert.changeToS3Acl(acl);
+        }
+        
         try
         {
             runningLog.debug("setObjectAcl", "bucketName: " + bucketName + ", objectKey: " + objectKey);
-            s3Service.putObjectAcl(bucketName, objectKey, s3acl, versionId);
+            s3Service.putObjectAcl(bucketName, objectKey, cannedACL, s3acl, versionId);
             
             reqBean.setRespTime(new Date());
             reqBean.setResultCode("0");
@@ -3929,16 +3998,17 @@ public class ObsClient
      * @sample ObsClient obsClient;<br/>
      *         ObsConfiguration config;<br/>
      *         final String endPoint = "129.4.234.2"; //存储服务器地址<br/>
-     *         final int httpPort = 5080; //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443; //HTTP请求对应的端口<br/>
      *         final String ak = "DF040F692AA69F0EEC55"; //接入证书<br/>
      *         final String sk = "ffkZzMmozB4EzQr0r3HxNItX1pgAAAFLKqafDuId";
      *         //安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<p>
@@ -3985,14 +4055,53 @@ public class ObsClient
         String destinationBucketName = copyObjectRequest.getDestinationBucketName();
         String destinationKey = copyObjectRequest.getDestinationObjectKey();
         
+        // 2016-03-14 modify by swx231817
+        boolean replaceMetadata = copyObjectRequest.isReplaceMetadata();
+        String versionId = copyObjectRequest.getVersionId();
+        Calendar ifModifiedSince = null;
+        if (null != copyObjectRequest.getIfModifiedSince())
+        {
+            ifModifiedSince = Calendar.getInstance();
+            ifModifiedSince.setTime(copyObjectRequest.getIfModifiedSince());
+        }
+        Calendar ifUnmodifiedSince = null;
+        if (null != copyObjectRequest.getIfUnmodifiedSince())
+        {
+            ifUnmodifiedSince = Calendar.getInstance();
+            ifUnmodifiedSince.setTime(copyObjectRequest.getIfUnmodifiedSince());
+        }
+        String[] ifMatchTags = null;
+        if (null != copyObjectRequest.getIfMatchTag())
+        {
+            ifMatchTags = new String[] {copyObjectRequest.getIfMatchTag()};
+        }
+        String[] ifNoneMatchTags = null;
+        if (null != copyObjectRequest.getIfNoneMatchTag())
+        {
+            ifNoneMatchTags = new String[] {copyObjectRequest.getIfNoneMatchTag()};
+        }
+        SS3Object ss3Object = new SS3Object(destinationKey);
+        if (null != copyObjectRequest.getNewObjectMetadata())
+        {
+            ss3Object.addAllMetadata(copyObjectRequest.getNewObjectMetadata().getMetadata());
+        }
         runningLog.debug("copyObject", "Source bucket name: " + sourceBucketName + ", sourceKey: " + sourceKey
             + ", destinationBucketName: " + destinationBucketName + ", destinationKey: " + destinationKey);
         
-        StorageObject destinationObject = new StorageObject(destinationKey);
         try
         {
             Map<String, Object> retMap =
-                s3Service.copyObject(sourceBucketName, sourceKey, destinationBucketName, destinationObject, false);
+                s3Service.copyVersionedObject(versionId,
+                    sourceBucketName,
+                    sourceKey,
+                    destinationBucketName,
+                    ss3Object,
+                    replaceMetadata,
+                    ifModifiedSince,
+                    ifUnmodifiedSince,
+                    ifMatchTags,
+                    ifNoneMatchTags);
+            
             CopyObjectResult copyRet = new CopyObjectResult();
             Convert.fillCopyResult(copyRet, retMap);
             runningLog.debug("copyObject", "CopyObjectResult Etag: " + copyRet.getEtag()
@@ -4040,15 +4149,16 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         String bucketName = "testbucket002"; <br/>
      *         String objectKey = "testobject001"; <br/>
@@ -4102,41 +4212,41 @@ public class ObsClient
         }
     }
     
-    /**
-     * 创建获取桶内对象列表临时授权
-     * 
-     * @param bucketName 桶名
-     * @param expiryTime 临时授权的有效时间
-     * @return 临时授权的URL字符串
-     * @throws ObsException ObsException
-     */
-    public String createSignedGetObjectListUrl(String bucketName, Date expiryTime)
-        throws ObsException
-    {
-        InterfaceLogBean reqBean = new InterfaceLogBean("createSignedGetObjectListUrl", s3Service.getEndpoint(), "");
-        
-        try
-        {
-            runningLog.debug("createSignedGetObjectListUrl", "bucketName: " + bucketName + ", expiryTime: "
-                + expiryTime);
-            String a = s3Service.createSignedGetUrl(bucketName, null, expiryTime);
-            runningLog.debug("createSignedGetObjectListUrl", "return url: " + a);
-            
-            reqBean.setRespTime(new Date());
-            reqBean.setResultCode("0");
-            ilog.info(reqBean);
-            return a;
-        }
-        catch (S3ServiceException e)
-        {
-            reqBean.setRespTime(new Date());
-            reqBean.setResultCode(e.getErrorCode());
-            ilog.error(reqBean);
-            runningLog.error("createSignedGetObjectListUrl",
-                "Exception:" + (null == e.getXmlMessage() ? e.getErrorMessage() : e.getXmlMessage()));
-            throw Convert.changeFromS3Exception(e);
-        }
-    }
+    //    /**
+    //     * 创建获取桶内对象列表临时授权
+    //     * 
+    //     * @param bucketName 桶名
+    //     * @param expiryTime 临时授权的有效时间
+    //     * @return 临时授权的URL字符串
+    //     * @throws ObsException ObsException
+    //     */
+    //    public String createSignedGetObjectListUrl(String bucketName, Date expiryTime)
+    //        throws ObsException
+    //    {
+    //        InterfaceLogBean reqBean = new InterfaceLogBean("createSignedGetObjectListUrl", s3Service.getEndpoint(), "");
+    //        
+    //        try
+    //        {
+    //            runningLog.debug("createSignedGetObjectListUrl", "bucketName: " + bucketName + ", expiryTime: "
+    //                + expiryTime);
+    //            String a = s3Service.createSignedGetUrl(bucketName, null, expiryTime);
+    //            runningLog.debug("createSignedGetObjectListUrl", "return url: " + a);
+    //            
+    //            reqBean.setRespTime(new Date());
+    //            reqBean.setResultCode("0");
+    //            ilog.info(reqBean);
+    //            return a;
+    //        }
+    //        catch (S3ServiceException e)
+    //        {
+    //            reqBean.setRespTime(new Date());
+    //            reqBean.setResultCode(e.getErrorCode());
+    //            ilog.error(reqBean);
+    //            runningLog.error("createSignedGetObjectListUrl",
+    //                "Exception:" + (null == e.getXmlMessage() ? e.getErrorMessage() : e.getXmlMessage()));
+    //            throw Convert.changeFromS3Exception(e);
+    //        }
+    //    }
     
     //    /**
     //     * 创建获取对象内容的临时授权
@@ -4384,15 +4494,16 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         </p>
      *         try<br/>
      *         {<br/>
@@ -4433,11 +4544,16 @@ public class ObsClient
         {
             metadata.put("x-amz-website-redirect-location", request.getWebSiteRedirectLocation());
         }
+        S3AccessControlList s3acl = null;
+        if (null != request.getAcl())
+        {
+            s3acl = Convert.changeToS3Acl(request.getAcl());
+        }
         S3MultipartUpload testMultipartUpload;
         try
         {
             runningLog.debug("InitiateMultipartUploadResult", "bucketName: " + bucketName + ", objectKey: " + objectKey);
-            testMultipartUpload = s3Service.multipartStartUpload(bucketName, objectKey, metadata);
+            testMultipartUpload = s3Service.multipartStartUpload(bucketName, objectKey, metadata, s3acl, null);
             InitiateMultipartUploadResult ret = Convert.changeFromS3MulipartRet(testMultipartUpload);
             runningLog.debug("InitiateMultipartUploadResult", "bucketName: " + ret.getBucketName() + ", objectKey: "
                 + ret.getObjectKey() + ", UploadId:" + ret.getUploadId());
@@ -4470,16 +4586,17 @@ public class ObsClient
      * @sample ObsClient obsClient;<br/>
      *         ObsConfiguration config;<br/>
      *         final String endPoint = "129.4.234.2"; //存储服务器地址<br/>
-     *         final int httpPort = 5080; //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443; //HTTP请求对应的端口<br/>
      *         final String ak = "DF040F692AA69F0EEC55"; //接入证书<br/>
      *         final String sk = "ffkZzMmozB4EzQr0r3HxNItX1pgAAAFLKqafDuId";
      *         //安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<p>
@@ -4547,15 +4664,16 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         </p>
      *         try<br/>
      *         {<br/>
@@ -4601,14 +4719,17 @@ public class ObsClient
         {
             S3MultipartUpload upload =
                 new S3MultipartUpload(request.getUploadId(), request.getBucketName(), request.getObjectKey());// 上传段的请求，其实只需要一个upload
-            SS3Object object = new SS3Object(request.getFile());// 上传的对象
+            //            SS3Object object = new SS3Object(request.getFile());// 上传的对象
+            
+            long size = (null == request.getPartSize()) ? request.getFile().length() : request.getPartSize();
+            SS3Object object = new SS3Object(request.getFile(), size, request.getOffset());// 上传的对象
             object.setBucketName(request.getBucketName());
             object.setKey(request.getObjectKey());
-            if (null != request.getPartSize())
-            {
-                object.setContentLength(request.getPartSize());
-            }
-            
+            //            if(null != request.getPartSize())
+            //            {
+            //                object.setContentLength(request.getPartSize());
+            //            }
+            //            
             MultipartPart partRet = s3Service.multipartUploadPart(upload, request.getPartNumber(), object);// 执行上传
             UploadPartResult ret = Convert.changeFromS3UploadPart(partRet);// 返回上传结果,段号和Etag
             
@@ -4643,15 +4764,16 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         </p>
      *         try<br/>
      *         {<br/>
@@ -4759,16 +4881,17 @@ public class ObsClient
      * @sample ObsClient obsClient;<br/>
      *         ObsConfiguration config;<br/>
      *         final String endPoint = "129.4.234.2"; //存储服务器地址<br/>
-     *         final int httpPort = 5080; //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443; //HTTP请求对应的端口<br/>
      *         final String ak = "DF040F692AA69F0EEC55"; //接入证书<br/>
      *         final String sk = "ffkZzMmozB4EzQr0r3HxNItX1pgAAAFLKqafDuId";
      *         //安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         <p>
      *         try<br/>
      *         {<p>
@@ -4858,15 +4981,16 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         </p>
      *         try<br/>
      *         {<br/>
@@ -4955,15 +5079,16 @@ public class ObsClient
      * @sample ObsClient obsClient = null;<br/>
      *         ObsConfiguration config = null;<br/>
      *         final String endPoint = "129.7.140.2";                           //存储服务器地址<br/>
-     *         final int httpPort = 5080;                                       //HTTP请求对应的端口<br/>
+     *         final int httpPort = 5443;                                       //HTTP请求对应的端口<br/>
      *         final String ak = "BE190CE793E89AABD780";                        //存储服务器用户的接入证书<br/>
      *         final String sk = "TKSbDHVXQnoEzYniUR+zKenbYtMAAAFMk+iaq8t5";    //存储服务器用户的安全证书<br/>
      *         <p>
      *         config = new ObsConfiguration();<br/>
      *         config.setEndPoint(endPoint);<br/>
-     *         config.setHttpsOnly(false);<br/>
+     *         config.setHttpsOnly(true);<br/>
      *         config.setEndpointHttpPort(httpPort);<br/>
-     *         config.setDisableDnsBucket(true);
+     *         config.setDisableDnsBucket(true);<br/>
+     *         config.setSignatString("v4");
      *         </p>
      *         try<br/>
      *         {<br/>
@@ -5017,8 +5142,8 @@ public class ObsClient
                     maxUploads,
                     false);
             MultipartUploadListing listResult = Convert.changeFromS3MultipartUploadChunk(result);// 将jet3的段任务转换为obs的段任务;
-            listResult.setKeyMarker(keyMarker);// TODO
-            listResult.setUploadIdMarker(uploadIdMarker);// TODO
+            listResult.setKeyMarker(keyMarker);
+            listResult.setUploadIdMarker(uploadIdMarker);
             runningLog.debug("listMultipartUploads", "BucketName: " + listResult.getBucketName() + ", Delimiter: "
                 + listResult.getDelimiter() + ", KeyMarker: " + listResult.getKeyMarker() + ", MaxUploads:"
                 + listResult.getMaxUploads() + ", MultipartTask amount: " + listResult.getMultipartTaskList());

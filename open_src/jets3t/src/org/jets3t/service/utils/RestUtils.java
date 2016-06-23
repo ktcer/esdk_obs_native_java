@@ -90,6 +90,7 @@ import org.jets3t.service.io.UnrecoverableIOException;
  *
  * @author James Murty
  */
+@SuppressWarnings("all")
 public class RestUtils {
 
     private static final Log log = LogFactory.getLog(RestUtils.class);
@@ -118,9 +119,12 @@ public class RestUtils {
             "content-length",
             "content-language",
             "expires",
+            "origin",
             "cache-control",
             "content-disposition",
-            "content-encoding");
+            "content-encoding",
+            "access-control-request-method",
+            "access-control-request-headers");
 
 
     /**
@@ -187,7 +191,7 @@ public class RestUtils {
             for (Map.Entry<String, Object> entry: headersMap.entrySet()) {
                 Object key = entry.getKey();
                 Object value = entry.getValue();
-
+ 
                 if (key == null) {
                     continue;
                 }

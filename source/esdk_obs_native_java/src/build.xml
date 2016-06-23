@@ -1,23 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <!-- ==================================================== -->
-<!-- Build file for uds-java-sdk-->
+<!-- Build file for obs-java-sdk-->
 <!-- ==================================================== -->
 
-<project name="uds-java-sdk" default="service" basedir=".">
-	<property name="src.dir" value="./com/huawei/uds/services" />
-	<property name="src.jets3t.dir" value="../../../../common/jets3t/jets3t-0.9/org/jets3t/service" />
-	<property name="lib.common.dir" value="../../../../../../3rdsoft/lib/jar" />
+<project name="esdk_obs_native_java" default="service" basedir=".">
+	<property name="src.dir" value="./com/huawei/obs" />
+	<property name="src.jets3t.dir" value="../../../open_src/jets3t/src/org/jets3t/service" />
+	<property name="lib.jets3t.dir" value="../../../open_src/jets3t/libs/java-xmlbuilder" />
+	<property name="lib.common.dir" value="../../../open_src" />
 	<property name="lib.dir" value="../lib" />
 	<property name="jar.dir" value="${lib.dir}/jar" />
-	<property name="appName" value="uds-java-sdk" />
+	<property name="appName" value="obs-java-sdk" />
 	<property name="classes.root.dir" value="../bin" />
 	<property name="classes.src.dir" value="../bin" />
-	<property name="classes.jets3t.dir" value="../../../../../component/jets3t/jets3t-0.9/bin" />
+	<property name="classes.jets3t.dir" value="../../../../../../../component/jets3t/jets3t-0.9/bin" />
 	<property name="target.dir" value="../target" />
 	<property name="target.lib.dir" value="../target/lib" />
 	<property name="jets3tshell.name" value="build_jets3t.sh" />
-	<property name="uds-version" value="1.0" />
+	<property name="obs-version" value="1.0" />
 
 
 	<!-- Compilation Classpath 路径设置     -->
@@ -25,12 +26,16 @@
 		<pathelement location="${classes.src.dir}" />
 		<fileset dir="${lib.dir}" includes="*.jar" />
 		<fileset dir="${lib.common.dir}">
+			<include name="log4j-1.2.16.jar" />
 			<include name="commons-logging-1.1.1.jar" />
 			<include name="java-xmlbuilder-0.4.jar" />
 			<include name="jdom-1.1.jar" />
-			<include name="commons-codec-1.4.jar" />
-			<include name="httpclient-4.1.2.jar" />
-			<include name="httpcore-4.1.2.jar" />
+			<include name="commons-codec-1.9.jar" />
+			<include name="httpclient-4.2.3.jar" />
+			<include name="httpcore-4.2.2.jar" />
+		</fileset>
+		<fileset dir="${lib.jets3t.dir}">
+			<include name="java-xmlbuilder-0.4.jar" />
 		</fileset>
 	</path>
 	
@@ -82,7 +87,7 @@
 
 	<target name="jar" depends="compile" description="Jar java sources">
 		<!-- Jar java class as necessary -->
-		<jar destfile="${jar.dir}/uds-java-sdk-${uds-version}.jar" encoding="utf-8" compress="true">
+		<jar destfile="${jar.dir}/esdk_obs_native_java_${obs-version}.jar" encoding="utf-8" compress="true">
 			<fileset dir="${classes.src.dir}" />
 		</jar>
 
@@ -92,13 +97,17 @@
 	<target name="service" depends="jar" description="Target">
 		<copy todir="${target.lib.dir}">
 			<fileset dir="${lib.dir}">
-				<include name="commons-codec-1.4.jar" />
+				<include name="log4j-1.2.16.jar" />
 				<include name="commons-logging-1.1.1.jar" />
-				<include name="httpclient-4.1.2.jar" />
-				<include name="httpcore-4.1.2.jar" />
 				<include name="java-xmlbuilder-0.4.jar" />
-				<include name="jdom.jar" />
+				<include name="jdom-1.1.jar" />
+				<include name="commons-codec-1.9.jar" />
+				<include name="httpclient-4.2.3.jar" />
+				<include name="httpcore-4.2.2.jar" />
 				<include name="jets3t-0.9.0.jar" />
+			</fileset>
+			<fileset dir="${lib.jets3t.dir}">
+				<include name="java-xmlbuilder-0.4.jar" />
 			</fileset>
 			<fileset dir="${jar.dir}">
 				<include name="*.jar" />

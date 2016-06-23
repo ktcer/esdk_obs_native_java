@@ -33,6 +33,7 @@ import org.jets3t.service.model.SS3Object;
  *
  * @author James Murty
  */
+@SuppressWarnings("all")
 public class GetObjectsEvent extends ServiceEvent {
     private SS3Object[] objects = null;
 

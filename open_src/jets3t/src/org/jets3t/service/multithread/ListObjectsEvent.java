@@ -34,6 +34,7 @@ import org.jets3t.service.S3ObjectsChunk;
  *
  * @author James Murty
  */
+@SuppressWarnings("all")
 public class ListObjectsEvent extends ServiceEvent {
     private List chunkList = null;
 

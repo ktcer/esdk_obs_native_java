@@ -79,6 +79,7 @@ import org.jets3t.service.utils.signedurl.SignedUrlHandler;
  *
  * @author James Murty
  */
+@SuppressWarnings("all")
 @Deprecated
 public class S3ServiceMulti {
 

@@ -23,6 +23,7 @@ import org.apache.commons.logging.LogFactory;
 import org.jets3t.service.model.StorageBucket;
 import org.jets3t.service.model.StorageObject;
 
+@SuppressWarnings("all")
 public class MxDelegate implements MxInterface {
     private static final Log log = LogFactory.getLog(MxDelegate.class);
 

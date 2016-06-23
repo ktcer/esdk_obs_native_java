@@ -22,19 +22,26 @@ import java.util.Arrays;
 
 import org.jets3t.service.model.BaseVersionOrDeleteMarker;
 
-public class VersionOrDeleteMarkersChunk {
+public class VersionOrDeleteMarkersChunk
+{
     private String bucketName = null;// add 2015-05-22
+    
     private String prefix = null;
+    
     private String delimiter = null;
+    
     private BaseVersionOrDeleteMarker[] items = null;
+    
     private String[] commonPrefixes = null;
+    
     private String nextKeyMarker = null;
+    
     private String nextVersionIdMarker = null;
+    
     private boolean isListingComplete;// add 2015-05-22
-
-    public VersionOrDeleteMarkersChunk(String name,String prefix, String delimiter,
-        BaseVersionOrDeleteMarker[] items, String[] commonPrefixes,
-        String nextKeyMarker, String nextVersionIdMarker)
+    
+    public VersionOrDeleteMarkersChunk(String name, String prefix, String delimiter, BaseVersionOrDeleteMarker[] items,
+        String[] commonPrefixes, String nextKeyMarker, String nextVersionIdMarker, boolean isListingComplete)
     {
         this.bucketName = name;
         this.prefix = prefix;
@@ -43,54 +50,62 @@ public class VersionOrDeleteMarkersChunk {
         this.commonPrefixes = commonPrefixes;
         this.nextKeyMarker = nextKeyMarker;
         this.nextVersionIdMarker = nextVersionIdMarker;
+        this.isListingComplete = isListingComplete;
     }
-
-    public BaseVersionOrDeleteMarker[] getItems() {
+    
+    public BaseVersionOrDeleteMarker[] getItems()
+    {
         return items;
     }
-
-    public int getItemCount() {
+    
+    public int getItemCount()
+    {
         return items.length;
     }
-
+    
     /**
      * @return
      * the common prefixes in this chunk.
      */
-    public String[] getCommonPrefixes() {
+    public String[] getCommonPrefixes()
+    {
         return commonPrefixes;
     }
-
+    
     /**
      * @return
      * the last key returned by the previous chunk if that chunk was incomplete, null otherwise.
      */
-    public String getNextKeyMarker() {
+    public String getNextKeyMarker()
+    {
         return nextKeyMarker;
     }
-
-    public String getNextVersionIdMarker() {
+    
+    public String getNextVersionIdMarker()
+    {
         return nextVersionIdMarker;
     }
-
+    
     /**
      * @return
      * the prefix applied when this object chunk was generated. If no prefix was
      * applied, this method will return null.
      */
-    public String getPrefix() {
+    public String getPrefix()
+    {
         return prefix;
     }
-
+    
     /**
      * @return
      * the delimiter applied when this object chunk was generated. If no
      * delimiter was applied, this method will return null.
      */
-    public String getDelimiter() {
+    public String getDelimiter()
+    {
         return delimiter;
     }
-
+    
     @Override
     public String toString()
     {
@@ -98,25 +113,25 @@ public class VersionOrDeleteMarkersChunk {
             + Arrays.toString(items) + ", commonPrefixes=" + Arrays.toString(commonPrefixes) + ", nextKeyMarker="
             + nextKeyMarker + ", nextVersionIdMarker=" + nextVersionIdMarker + "]";
     }
-
+    
     public String getBucketName()
     {
         return bucketName;
     }
-
+    
     public void setBucketName(String bucketName)
     {
         this.bucketName = bucketName;
     }
-
+    
     public boolean isListingComplete()
     {
         return isListingComplete;
     }
-
+    
     public void setListingComplete(boolean isListingComplete)
     {
         this.isListingComplete = isListingComplete;
     }
-
+    
 }

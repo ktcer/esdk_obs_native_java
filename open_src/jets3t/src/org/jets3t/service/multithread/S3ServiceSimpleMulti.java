@@ -45,6 +45,7 @@ import org.jets3t.service.model.SS3Object;
  *
  * @author James Murty
  */
+@SuppressWarnings("all")
 @Deprecated
 public class S3ServiceSimpleMulti {
     private S3Service s3Service = null;

@@ -95,6 +95,18 @@ public class StorageObject extends BaseStorageItem implements Cloneable {
         setMd5Hash(ServiceUtils.computeMD5Hash(new FileInputStream(file)));
     }
 
+    public StorageObject(File file, long length, long offset) throws NoSuchAlgorithmException, IOException {
+        this(file.getName());
+        setContentLength(length>(file.length()-offset)?(file.length()-offset):length);
+        setContentType(Mimetypes.getInstance().getMimetype(file));
+        if (!file.exists()) {
+            throw new FileNotFoundException("Cannot read from file: " + file.getAbsolutePath());
+        }
+//        setDataInputFile(file);
+        setDataInputStream(new FileInputStream(file));
+        this.dataInputStream.skip(offset);
+        setMd5Hash(ServiceUtils.computeMD5Hash(new FileInputStream(file), length, offset));
+    }
     /**
      * Create an object representing text data. The object is initialized with the given
      * key, the given string as its data content (encoded as UTF-8), a content type of

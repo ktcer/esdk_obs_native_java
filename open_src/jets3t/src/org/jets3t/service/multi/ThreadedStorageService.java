@@ -79,6 +79,7 @@ import org.jets3t.service.utils.ServiceUtils;
  *
  * @author James Murty
  */
+@SuppressWarnings("all")
 public class ThreadedStorageService {
     private static final Log log = LogFactory.getLog(ThreadedStorageService.class);
 

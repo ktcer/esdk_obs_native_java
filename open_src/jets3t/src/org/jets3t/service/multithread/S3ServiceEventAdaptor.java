@@ -34,6 +34,7 @@ package org.jets3t.service.multithread;
  *
  * @author James Murty
  */
+@SuppressWarnings("all")
 public class S3ServiceEventAdaptor implements S3ServiceEventListener {
 
     private Throwable t[] = new Throwable[1];

@@ -32,6 +32,7 @@ import org.jets3t.service.Constants;
  *
  * @author Nikolas Coukouma
  */
+@SuppressWarnings("rawtypes")
 public class AWSDevPayProduct implements Serializable, Comparable {
     private static final long serialVersionUID = 7581378683354747125L;
 
@@ -131,6 +132,7 @@ public class AWSDevPayProduct implements Serializable, Comparable {
      *
      * @return the Vector of <code>AWSDevPayProduct</code>s, sorted by name
      */
+    @SuppressWarnings("unchecked")
     public static Vector load(Properties prodProps) {
         Vector ret = new Vector();
         Enumeration propEnum = prodProps.propertyNames();

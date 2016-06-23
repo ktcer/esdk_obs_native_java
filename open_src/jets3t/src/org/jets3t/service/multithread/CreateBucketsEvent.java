@@ -33,6 +33,7 @@ import org.jets3t.service.model.SS3Bucket;
  *
  * @author James Murty
  */
+@SuppressWarnings("all")
 public class CreateBucketsEvent extends ServiceEvent {
     private SS3Bucket[] buckets = null;
 

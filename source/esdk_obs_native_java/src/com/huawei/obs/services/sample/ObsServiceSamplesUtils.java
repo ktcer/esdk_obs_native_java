@@ -1,13 +1,18 @@
-/*
- * Copyright Notice:
- *      Copyright  1998-2009, Huawei Technologies Co., Ltd.  ALL Rights Reserved.
- *
- *      Warning: This computer software sourcecode is protected by copyright law
- *      and international treaties. Unauthorized reproduction or distribution
- *      of this sourcecode, or any portion of it, may result in severe civil and
- *      criminal penalties, and will be prosecuted to the maximum extent
- *      possible under the law.
- */
+/**
+* Copyright 2015 Huawei Technologies Co., Ltd. All rights reserved.
+* eSDK is licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*    http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
+
 package com.huawei.obs.services.sample;
 
 import java.io.ByteArrayInputStream;
@@ -28,6 +33,7 @@ import com.huawei.obs.services.model.BucketQuota;
 import com.huawei.obs.services.model.BucketStorageInfo;
 import com.huawei.obs.services.model.CanonicalGrantee;
 import com.huawei.obs.services.model.CompleteMultipartUploadRequest;
+import com.huawei.obs.services.model.CopyObjectRequest;
 import com.huawei.obs.services.model.CopyObjectResult;
 import com.huawei.obs.services.model.DeleteObjectsRequest;
 import com.huawei.obs.services.model.GroupGrantee;
@@ -37,6 +43,7 @@ import com.huawei.obs.services.model.InitiateMultipartUploadResult;
 import com.huawei.obs.services.model.KeyAndVersion;
 import com.huawei.obs.services.model.ListMultipartUploadsRequest;
 import com.huawei.obs.services.model.ListPartsRequest;
+import com.huawei.obs.services.model.ListVersionsResult;
 import com.huawei.obs.services.model.MultipartUpload;
 import com.huawei.obs.services.model.MultipartUploadListing;
 import com.huawei.obs.services.model.ObjectListing;
@@ -47,7 +54,7 @@ import com.huawei.obs.services.model.PutObjectResult;
 import com.huawei.obs.services.model.S3Bucket;
 import com.huawei.obs.services.model.S3Object;
 import com.huawei.obs.services.model.UploadPartRequest;
-import com.huawei.obs.services.model.UploadPartResult;
+import com.huawei.obs.services.model.VersionOrDeleteMarker;
 
 /**SDK示例程序，示例程序演示了如何使用sdk的基本功能
  */
@@ -196,12 +203,14 @@ public class ObsServiceSamplesUtils
         hwAcl.setOwner(hwOwner);
         CanonicalGrantee canonicalGrant = new CanonicalGrantee("ECECECECECECECECECECECECECEC0001");
         canonicalGrant.setDisplayName("EC_user001");
-        GroupGrantee groupGrant = new GroupGrantee("http://acs.amazonaws.com/groups/global/AuthenticatedUsers");
+        //        GroupGrantee groupGrant = new GroupGrantee("http://acs.amazonaws.com/groups/global/AuthenticatedUsers");
+        GroupGrantee groupGrant = new GroupGrantee();
+        groupGrant.setIdentifier("");
         hwAcl.grantPermission(canonicalGrant, Permission.PERMISSION_WRITE);
         hwAcl.grantPermission(groupGrant, Permission.PERMISSION_READ);
         try
         {
-            service.setBucketAcl(bucketName, null, hwAcl);
+            service.setBucketAcl(bucketName, "public-read-write", null);
             System.out.println("set bucket acl success.");
         }
         catch (ObsException e)
@@ -425,8 +434,8 @@ public class ObsServiceSamplesUtils
             DeleteObjectsRequest request = new DeleteObjectsRequest();
             request.setBucketName(bucketName);
             KeyAndVersion[] keyAndVersions = new KeyAndVersion[2];
-            keyAndVersions[0] = new KeyAndVersion("object001");
-            keyAndVersions[1] = new KeyAndVersion("object002");// TODO 待测
+            keyAndVersions[0] = new KeyAndVersion("object000");
+            keyAndVersions[1] = new KeyAndVersion("010.lrv");
             request.setKeyAndVersions(keyAndVersions);
             service.deleteObjects(request);
             System.out.println("Delete objects success.");
@@ -446,24 +455,24 @@ public class ObsServiceSamplesUtils
      */
     public static void objectGetTest(ObsClient service, String bucketName, String objectKey)
     {
-        //        try
-        //        {
-        //            S3Object object = service.getObject(bucketName, objectKey);
-        //            try
-        //            {
-        //                object.getObjectContent().close();
-        //            }
-        //            catch (IOException e)
-        //            {
-        //                e.printStackTrace();
-        //            }
-        //            System.out.println("Get object :");
-        //            objectDisplay(object);
-        //        }
-        //        catch (ObsException e)
-        //        {
-        //            System.out.println("Get object failed. " + e.getErrorMessage() + " response code :" + e.getResponseCode());
-        //        }
+        try
+        {
+            S3Object object = service.getObject(bucketName, objectKey, "111");
+            try
+            {
+                object.getObjectContent().close();
+            }
+            catch (IOException e)
+            {
+                e.printStackTrace();
+            }
+            System.out.println("Get object :");
+            objectDisplay(object);
+        }
+        catch (ObsException e)
+        {
+            System.out.println("Get object failed. " + e.getErrorMessage() + " response code :" + e.getResponseCode());
+        }
     }
     
     /**测试查看对象元数据
@@ -532,7 +541,7 @@ public class ObsServiceSamplesUtils
         hwAcl.grantPermission(groupGrant, Permission.PERMISSION_READ);
         try
         {
-            service.setObjectAcl(bucketName, objectKey, hwAcl, null);
+            service.setObjectAcl(bucketName, objectKey, "public-read-write", null, null);
             System.out.println("set object acl success.");
         }
         catch (ObsException e)
@@ -555,7 +564,13 @@ public class ObsServiceSamplesUtils
     {
         try
         {
-            CopyObjectResult result = service.copyObject(bucketSrcName, objectSrcKey, bucketDstName, objectDstKey);
+            CopyObjectRequest copyObjectRequest =
+                new CopyObjectRequest(bucketSrcName, objectSrcKey, bucketDstName, objectDstKey);
+//            copyObjectRequest.setVersionId("000001537963737948cbc4c1d51d30763088630b739fc20a002D55445346485a");
+//            copyObjectRequest.setIfModifiedSince(new Date(116,02,17));
+            CopyObjectResult result =
+            //                service.copyObject(bucketSrcName, objectSrcKey, bucketDstName, objectDstKey);
+                service.copyObject(copyObjectRequest);
             System.out.println("copy object success." + result.toString());
         }
         catch (ObsException e)
@@ -574,9 +589,10 @@ public class ObsServiceSamplesUtils
      * @param objectKey
      *            对象名称
      */
+    @SuppressWarnings("all")
     private static void createSignedUrlTest(ObsClient service, String bucketName, String objectKey)
     {
-        final long offsetTime = 600000L;
+        final long offsetTime = 6000000L;
         Date expiryTime = new Date(System.currentTimeMillis() + offsetTime);
         try
         {
@@ -605,6 +621,17 @@ public class ObsServiceSamplesUtils
         InitiateMultipartUploadRequest request = new InitiateMultipartUploadRequest();
         request.setBucketName(bucketName);
         request.setObjectKey(objectKey);
+        AccessControlList hwAcl = new AccessControlList();
+        Owner hwOwner = new Owner();
+        hwOwner.setId("ECECECECECECECECECECECECECEC0001");
+        hwOwner.setDisplayName("EC_user001");
+        hwAcl.setOwner(hwOwner);
+        CanonicalGrantee canonicalGrant = new CanonicalGrantee("ECECECECECECECECECECECECECEC0001");
+        canonicalGrant.setDisplayName("EC_user001");
+        GroupGrantee groupGrant = new GroupGrantee("http://acs.amazonaws.com/groups/global/AuthenticatedUsers");
+        hwAcl.grantPermission(canonicalGrant, Permission.PERMISSION_WRITE);
+        hwAcl.grantPermission(groupGrant, Permission.PERMISSION_READ);
+        request.setAcl(hwAcl);
         Map<String, Object> metadata = new HashMap<String, Object>();
         metadata.put("test-md-value", "testing, testing, 123");
         metadata.put("test-timestamp-value", System.currentTimeMillis());
@@ -621,35 +648,35 @@ public class ObsServiceSamplesUtils
             return;
         }
         
-        UploadPartRequest requestUpload = null;//new UploadPartRequest();
-        
-        //        requestUpload.setBucketName(bucketName);
-        //        requestUpload.setObjectKey(objectKey);
-        //        requestUpload.setPartNumber(1);
-        //        String greeting = "Hello zlw!";
-        ////        ByteArrayInputStream input = new ByteArrayInputStream(greeting.getBytes());
-        //        requestUpload.setPartSize(Long.valueOf(greeting.getBytes().length));
-        //        //        requestUpload.setInputStream(input);
-        //        requestUpload.setUploadId(uploadInfo.getUploadId());
-        try
-        {
-            UploadPartResult result = service.uploadPart(requestUpload);
-            System.out.println("multipart upload success. " + result.getEtag());
-            
-        }
-        catch (ObsException e)
-        {
-            System.out.println("multipart upload failed. " + e.getErrorMessage() + " response code :"
-                + e.getResponseCode());
-        }
-        catch (NoSuchAlgorithmException e)
-        {
-            System.out.println("multipart upload failed. " + e.getMessage());
-        }
-        catch (IOException e)
-        {
-            System.out.println("multipart upload failed. " + e.getMessage());
-        }
+        //        UploadPartRequest requestUpload = null;//new UploadPartRequest();
+        //        
+        //                requestUpload.setBucketName(bucketName);
+        //                requestUpload.setObjectKey(objectKey);
+        //                requestUpload.setPartNumber(1);
+        //                String greeting = "Hello zlw!";
+        //        //        ByteArrayInputStream input = new ByteArrayInputStream(greeting.getBytes());
+        //                requestUpload.setPartSize(Long.valueOf(greeting.getBytes().length));
+        //                //        requestUpload.setInputStream(input);
+        //                requestUpload.setUploadId(uploadInfo.getUploadId());
+        //        try
+        //        {
+        //            UploadPartResult result = service.uploadPart(requestUpload);
+        //            System.out.println("multipart upload success. " + result.getEtag());
+        //            
+        //        }
+        //        catch (ObsException e)
+        //        {
+        //            System.out.println("multipart upload failed. " + e.getErrorMessage() + " response code :"
+        //                + e.getResponseCode());
+        //        }
+        //        catch (NoSuchAlgorithmException e)
+        //        {
+        //            System.out.println("multipart upload failed. " + e.getMessage());
+        //        }
+        //        catch (IOException e)
+        //        {
+        //            System.out.println("multipart upload failed. " + e.getMessage());
+        //        }
         
         ListPartsRequest requestList = new ListPartsRequest();
         requestList.setBucketName(bucketName);
@@ -753,6 +780,41 @@ public class ObsServiceSamplesUtils
         
     }
     
+    public static void objectVersionList(ObsClient client, String bucketName)
+    {
+        try
+        {
+            ListVersionsResult listVersions = client.listVersions(bucketName, null, null, null, null, 0, null);
+            for (VersionOrDeleteMarker version : listVersions.getVersions())
+            {
+                System.err.println(version.getKey() + " : " + version.getVersionId());
+            }
+        }
+        catch (ObsException e)
+        {
+            e.printStackTrace();
+        }
+    }
+    
+    public static void uploadList(ObsClient client, String bucketName)
+    {
+        ListMultipartUploadsRequest req = new ListMultipartUploadsRequest();
+        req.setBucketName(bucketName);
+        try
+        {
+            MultipartUploadListing resp = client.listMultipartUploads(req);
+            System.err.println(resp.getMultipartTaskList().size());
+            for (MultipartUpload list : resp.getMultipartTaskList())
+            {
+                System.err.println(list.getUploadId());
+            }
+        }
+        catch (ObsException e)
+        {
+            e.printStackTrace();
+        }
+    }
+    
     /**测试主入口
      * 
      * @param args 函数入参
@@ -760,48 +822,52 @@ public class ObsServiceSamplesUtils
     public static void main(String[] args)
     {
         ObsClient service;
-        final String bucketName = "bucket";
-        final String objectKey = "object";
-        //        final String newObjectKey = "object000";
-        final int httpPort = 5080;
+        final String bucketName = "bucket01";
+                final String objectKey = "a.jpg";
+//                final String newObjectKey = "object000";
+        final int httpPort = 443;
         try
         {
             ObsConfiguration config = new ObsConfiguration();
-            config.setEndPoint("129.4.234.2");
-            config.setHttpsOnly(false);
+            config.setEndPoint("172.22.4.104");
+            config.setHttpsOnly(true);
             config.setEndpointHttpPort(httpPort);
             config.setDisableDnsBucket(true);
-            service = new ObsClient("DF040F692AA69F0EEC55", "ffkZzMmozB4EzQr0r3HxNItX1pgAAAFLKqafDuId", config);
+            //            config.setSignatString("v4");
+            service = new ObsClient("CE5F0C8007110011964B", "9RYNL7iGZIFgZFEY+3pUwVC+1SgAAAFTBxEAEdKV", config);
             
             System.out.println("===========TEST START===========");
             
             //                    bucketCreateTest(service, bucketName);
-            //                    bucketListTest(service);
+            //                                bucketListTest(service);
             //                    bucketGetStorageInfoTest(service, bucketName);
             //                    bucketGetLocationTest(service, bucketName);
             //                    bucketSetQuotaTest(service, bucketName);
             //                    bucketGetQuotaTest(service, bucketName);
-            //                    bucketSetAcl(service, bucketName);
+//                                            bucketSetAcl(service, bucketName);
             //                    bucketGetAcl(service, bucketName);
             //                    // In Single DC, the action setStoragePolicy is invalid.
             //                    // bucketSetStoragePolicy(service, bucketName);
             //                    // In Single DC, the action getStoragePolicy is invalid.
             //                    // bucketGetStoragePolicy(service, bucketName);
             //                    objectPutTest(service, bucketName, objectKey);
-            //                    objectCopyTest(service, bucketName, objectKey, bucketName, newObjectKey);
-            //                    objectGetTest(service, bucketName, objectKey);
+//                        objectCopyTest(service, bucketName, objectKey, bucketName, newObjectKey);
+            //            objectGetTest(service, bucketName, objectKey);
             //                    objectMetaGetTest(service, bucketName, objectKey);
-            //                    objectListTest(service, bucketName);
+            //                                objectListTest(service, bucketName);
             //                    objectGetAcl(service, bucketName, objectKey);
-            //                    objectSetAcl(service, bucketName, objectKey);
-            //                    createSignedUrlTest(service, bucketName, objectKey);
-            //                    multipartTest(service, bucketName, objectKey);
+                                objectSetAcl(service, bucketName, objectKey);
+//                                            multipartTest(service, bucketName, objectKey);
             //                    multipartCompleteTest(service, bucketName, objectKey);
             //                    // test deleting
             //                    objectDeleteTest(service, bucketName, objectKey);
             //                    objectDeleteTest(service, bucketName, newObjectKey);
             //                    bucketDeleteTest(service, bucketName);
-            createSignedUrlTest(service, bucketName, objectKey);
+            //                    // test signedUrl
+            //            createSignedUrlTest(service, bucketName, objectKey);
+//            uploadList(service, bucketName);
+            //            objectsDeleteTest(service, bucketName);
+            //            objectVersionList(service, bucketName);
             System.out.println("===========TEST END===========");
         }
         catch (ObsException e1)

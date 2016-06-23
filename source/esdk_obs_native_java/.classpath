@@ -3,7 +3,7 @@
 	<classpathentry kind="src" path="src"/>
 	<classpathentry exported="true" kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
 	<classpathentry combineaccessrules="false" exported="true" kind="src" path="/jets3t"/>
-	<classpathentry kind="lib" path="D:/JAR/common/log4j-1.2.16.jar"/>
-	<classpathentry kind="lib" path="D:/JAR/common/httpclient-4.2.3.jar"/>
+	<classpathentry kind="lib" path="D:/workspace/eSDK_Storage_V100R005/Server/open_src/log4j-1.2.16.jar"/>
+	<classpathentry kind="lib" path="D:/workspace/eSDK_Storage_V100R005/Server/open_src/httpclient-4.2.3.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

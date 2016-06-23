@@ -40,6 +40,7 @@ public class GZipInflatingOutputStream extends OutputStream implements OutputStr
     /*
      * File header flags.
      */
+    @SuppressWarnings("unused")
     private final static int FTEXT    = 1;    // Extra text
     private final static int FHCRC    = 2;    // Header CRC
     private final static int FEXTRA    = 4;    // Extra field

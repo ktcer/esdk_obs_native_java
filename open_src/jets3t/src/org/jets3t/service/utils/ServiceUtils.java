@@ -551,6 +551,29 @@ public class ServiceUtils {
         }
     }
 
+    public static byte[] computeMD5Hash(InputStream is, long length, long offset) throws NoSuchAlgorithmException, IOException {
+        BufferedInputStream bis = new BufferedInputStream(is);
+        try {
+        	bis.skip(offset);
+            MessageDigest messageDigest = MessageDigest.getInstance("MD5");
+            byte[] buffer = new byte[16384];
+            int bytesRead = -1;
+            long readLen = 0;
+            long bufLen = 16384>length?length:16384;
+            while ( readLen < length  && (bytesRead = bis.read(buffer, 0, (int) bufLen)) != -1) {
+                messageDigest.update(buffer, 0, bytesRead);
+                readLen += bytesRead;
+                bufLen = (length-readLen)>16384?16384:(length-readLen);
+            }
+            return messageDigest.digest();
+        } finally {
+            try {
+                bis.close();
+            } catch (Exception e) {
+                System.err.println("Unable to close input stream of hash candidate: " + e);
+            }
+        }
+    }
     /**
      * Computes the MD5 hash of the given data and returns it as a hex string.
      *

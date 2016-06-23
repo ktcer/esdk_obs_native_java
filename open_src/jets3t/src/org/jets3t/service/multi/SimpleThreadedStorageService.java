@@ -25,8 +25,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-import org.jets3t.service.StorageService;
 import org.jets3t.service.ServiceException;
+import org.jets3t.service.StorageService;
 import org.jets3t.service.model.StorageBucket;
 import org.jets3t.service.model.StorageObject;
 import org.jets3t.service.multi.event.CopyObjectsEvent;
@@ -52,19 +52,21 @@ import org.jets3t.service.multi.event.UpdateACLEvent;
  *
  * @author James Murty
  */
-public class SimpleThreadedStorageService {
+public class SimpleThreadedStorageService
+{
     private StorageService service = null;
-
+    
     /**
      * Construct a multi-threaded service based on a StorageService.
      *
      * @param service
      * a StorageService implementation that will be used to perform S3 requests.
      */
-    public SimpleThreadedStorageService(StorageService service) {
+    public SimpleThreadedStorageService(StorageService service)
+    {
         this.service = service;
     }
-
+    
     /**
      * Utility method to check an {@link StorageServiceEventAdaptor} for the occurrence of an error,
      * and if one is present to throw it.
@@ -72,17 +74,23 @@ public class SimpleThreadedStorageService {
      * @param adaptor
      * @throws ServiceException
      */
-    protected void throwError(StorageServiceEventAdaptor adaptor) throws ServiceException {
-        if (adaptor.wasErrorThrown()) {
+    protected void throwError(StorageServiceEventAdaptor adaptor)
+        throws ServiceException
+    {
+        if (adaptor.wasErrorThrown())
+        {
             Throwable thrown = adaptor.getErrorThrown();
-            if (thrown instanceof ServiceException) {
-                throw (ServiceException) thrown;
-            } else {
+            if (thrown instanceof ServiceException)
+            {
+                throw (ServiceException)thrown;
+            }
+            else
+            {
                 throw new ServiceException(thrown);
             }
         }
     }
-
+    
     /**
      * Creates multiple buckets.
      *
@@ -92,13 +100,18 @@ public class SimpleThreadedStorageService {
      * the created buckets.
      * @throws ServiceException
      */
-    public StorageBucket[] createBuckets(final String[] bucketNames) throws ServiceException {
+    public StorageBucket[] createBuckets(final String[] bucketNames)
+        throws ServiceException
+    {
         final List<StorageBucket> bucketList = new ArrayList<StorageBucket>();
-        StorageServiceEventAdaptor adaptor = new StorageServiceEventAdaptor() {
+        StorageServiceEventAdaptor adaptor = new StorageServiceEventAdaptor()
+        {
             @Override
-            public void event(CreateBucketsEvent event) {
+            public void event(CreateBucketsEvent event)
+            {
                 super.event(event);
-                if (ServiceEvent.EVENT_IN_PROGRESS == event.getEventCode()) {
+                if (ServiceEvent.EVENT_IN_PROGRESS == event.getEventCode())
+                {
                     bucketList.addAll(Arrays.asList(event.getCreatedBuckets()));
                 }
             };
@@ -107,7 +120,7 @@ public class SimpleThreadedStorageService {
         throwError(adaptor);
         return bucketList.toArray(new StorageBucket[bucketList.size()]);
     }
-
+    
     /**
      * Creates/uploads multiple objects.
      *
@@ -119,15 +132,18 @@ public class SimpleThreadedStorageService {
      * the created/uploaded objects.
      * @throws ServiceException
      */
-    public StorageObject[] putObjects(String bucketName,
-        final StorageObject[] objects) throws ServiceException
+    public StorageObject[] putObjects(String bucketName, final StorageObject[] objects)
+        throws ServiceException
     {
         final List<StorageObject> objectList = new ArrayList<StorageObject>();
-        StorageServiceEventAdaptor adaptor = new StorageServiceEventAdaptor() {
+        StorageServiceEventAdaptor adaptor = new StorageServiceEventAdaptor()
+        {
             @Override
-            public void event(CreateObjectsEvent event) {
+            public void event(CreateObjectsEvent event)
+            {
                 super.event(event);
-                if (ServiceEvent.EVENT_IN_PROGRESS == event.getEventCode()) {
+                if (ServiceEvent.EVENT_IN_PROGRESS == event.getEventCode())
+                {
                     objectList.addAll(Arrays.asList(event.getCreatedObjects()));
                 }
             };
@@ -136,7 +152,7 @@ public class SimpleThreadedStorageService {
         throwError(adaptor);
         return objectList.toArray(new StorageObject[objectList.size()]);
     }
-
+    
     /**
      * Copies multiple objects within or between buckets.
      *
@@ -158,27 +174,34 @@ public class SimpleThreadedStorageService {
      * items will be copied unchanged from the original objects using the COPY
      * metadata copying option.s
      */
-
+    
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public Map[] copyObjects(final String sourceBucketName, final String destinationBucketName,
         final String[] sourceObjectKeys, final StorageObject[] destinationObjects, boolean replaceMetadata)
         throws ServiceException
     {
         final List resultsList = new ArrayList();
-        StorageServiceEventAdaptor adaptor = new StorageServiceEventAdaptor() {
+        StorageServiceEventAdaptor adaptor = new StorageServiceEventAdaptor()
+        {
             @Override
-            public void event(CopyObjectsEvent event) {
+            public void event(CopyObjectsEvent event)
+            {
                 super.event(event);
-                if (ServiceEvent.EVENT_IN_PROGRESS == event.getEventCode()) {
+                if (ServiceEvent.EVENT_IN_PROGRESS == event.getEventCode())
+                {
                     resultsList.addAll(Arrays.asList(event.getCopyResults()));
                 }
             };
         };
-        (new ThreadedStorageService(service, adaptor)).copyObjects(sourceBucketName, destinationBucketName,
-            sourceObjectKeys, destinationObjects, replaceMetadata);
+        (new ThreadedStorageService(service, adaptor)).copyObjects(sourceBucketName,
+            destinationBucketName,
+            sourceObjectKeys,
+            destinationObjects,
+            replaceMetadata);
         throwError(adaptor);
-        return (Map[]) resultsList.toArray(new Map[resultsList.size()]);
+        return (Map[])resultsList.toArray(new Map[resultsList.size()]);
     }
-
+    
     /**
      * Deletes multiple objects
      *
@@ -188,13 +211,20 @@ public class SimpleThreadedStorageService {
      * the objects to delete.
      * @throws ServiceException
      */
-    public void deleteObjects(String bucketName, final StorageObject[] objects) throws ServiceException {
+    @SuppressWarnings("rawtypes")
+    public void deleteObjects(String bucketName, final StorageObject[] objects)
+        throws ServiceException
+    {
         final List objectList = new ArrayList();
-        StorageServiceEventAdaptor adaptor = new StorageServiceEventAdaptor() {
+        StorageServiceEventAdaptor adaptor = new StorageServiceEventAdaptor()
+        {
+            @SuppressWarnings("unchecked")
             @Override
-            public void event(DeleteObjectsEvent event) {
+            public void event(DeleteObjectsEvent event)
+            {
                 super.event(event);
-                if (ServiceEvent.EVENT_IN_PROGRESS == event.getEventCode()) {
+                if (ServiceEvent.EVENT_IN_PROGRESS == event.getEventCode())
+                {
                     objectList.addAll(Arrays.asList(event.getDeletedObjects()));
                 }
             };
@@ -202,7 +232,7 @@ public class SimpleThreadedStorageService {
         (new ThreadedStorageService(service, adaptor)).deleteObjects(bucketName, objects);
         throwError(adaptor);
     }
-
+    
     /**
      * Retrieves multiple objects (including details and data).
      * The objects' data will be stored in temporary files, and can be retrieved using
@@ -216,26 +246,35 @@ public class SimpleThreadedStorageService {
      * the retrieved objects.
      * @throws ServiceException
      */
-    public StorageObject[] getObjects(String bucketName, StorageObject[] objects) throws ServiceException {
+    public StorageObject[] getObjects(String bucketName, StorageObject[] objects)
+        throws ServiceException
+    {
         DownloadPackage[] downloadPackages = new DownloadPackage[objects.length];
-        try {
-            for (int i = 0; i < downloadPackages.length; i++) {
+        try
+        {
+            for (int i = 0; i < downloadPackages.length; i++)
+            {
                 // Create a temporary file for data, file will auto-delete on JVM exit.
                 File tempFile = File.createTempFile("jets3t-", ".tmp");
                 tempFile.deleteOnExit();
-
+                
                 downloadPackages[i] = new DownloadPackage(objects[i], tempFile);
             }
-        } catch (IOException e) {
+        }
+        catch (IOException e)
+        {
             throw new ServiceException("Unable to create temporary file to store object data", e);
         }
-
+        
         final List<StorageObject> objectList = new ArrayList<StorageObject>();
-        StorageServiceEventAdaptor adaptor = new StorageServiceEventAdaptor() {
+        StorageServiceEventAdaptor adaptor = new StorageServiceEventAdaptor()
+        {
             @Override
-            public void event(DownloadObjectsEvent event) {
+            public void event(DownloadObjectsEvent event)
+            {
                 super.event(event);
-                if (ServiceEvent.EVENT_IN_PROGRESS == event.getEventCode()) {
+                if (ServiceEvent.EVENT_IN_PROGRESS == event.getEventCode())
+                {
                     objectList.addAll(Arrays.asList(event.getDownloadedObjects()));
                 }
             };
@@ -244,7 +283,7 @@ public class SimpleThreadedStorageService {
         throwError(adaptor);
         return objectList.toArray(new StorageObject[objectList.size()]);
     }
-
+    
     /**
      * Retrieves multiple objects (including details and data).
      * The objects' data will be stored in temporary files, and can be retrieved using
@@ -263,12 +302,13 @@ public class SimpleThreadedStorageService {
         throws ServiceException
     {
         StorageObject[] objects = new StorageObject[objectKeys.length];
-        for (int i = 0; i < objectKeys.length; i++) {
+        for (int i = 0; i < objectKeys.length; i++)
+        {
             objects[i] = new StorageObject(objectKeys[i]);
         }
         return getObjects(bucketName, objects);
     }
-
+    
     /**
      * Retrieves details of multiple objects (details only, no data)
      *
@@ -280,14 +320,17 @@ public class SimpleThreadedStorageService {
      * objects populated with the details retrieved.
      * @throws ServiceException
      */
-    public StorageObject[] getObjectsHeads(String bucketName, StorageObject[] objects) throws ServiceException {
+    public StorageObject[] getObjectsHeads(String bucketName, StorageObject[] objects)
+        throws ServiceException
+    {
         String[] objectKeys = new String[objects.length];
-        for (int i = 0; i < objects.length; i++) {
+        for (int i = 0; i < objects.length; i++)
+        {
             objectKeys[i] = objects[i].getKey();
         }
         return getObjectsHeads(bucketName, objectKeys);
     }
-
+    
     /**
      * Retrieves details of multiple objects (details only, no data)
      *
@@ -299,13 +342,18 @@ public class SimpleThreadedStorageService {
      * objects populated with the details retrieved.
      * @throws ServiceException
      */
-    public StorageObject[] getObjectsHeads(String bucketName, final String[] objectKeys) throws ServiceException {
+    public StorageObject[] getObjectsHeads(String bucketName, final String[] objectKeys)
+        throws ServiceException
+    {
         final List<StorageObject> objectList = new ArrayList<StorageObject>();
-        StorageServiceEventAdaptor adaptor = new StorageServiceEventAdaptor() {
+        StorageServiceEventAdaptor adaptor = new StorageServiceEventAdaptor()
+        {
             @Override
-            public void event(GetObjectHeadsEvent event) {
+            public void event(GetObjectHeadsEvent event)
+            {
                 super.event(event);
-                if (ServiceEvent.EVENT_IN_PROGRESS == event.getEventCode()) {
+                if (ServiceEvent.EVENT_IN_PROGRESS == event.getEventCode())
+                {
                     objectList.addAll(Arrays.asList(event.getCompletedObjects()));
                 }
             };
@@ -314,7 +362,7 @@ public class SimpleThreadedStorageService {
         throwError(adaptor);
         return objectList.toArray(new StorageObject[objectList.size()]);
     }
-
+    
     /**
      * Retrieves Access Control List (ACL) settings for multiple objects.
      *
@@ -326,13 +374,18 @@ public class SimpleThreadedStorageService {
      * objects including the ACL information retrieved.
      * @throws ServiceException
      */
-    public StorageObject[] getObjectACLs(String bucketName, final StorageObject[] objects) throws ServiceException {
+    public StorageObject[] getObjectACLs(String bucketName, final StorageObject[] objects)
+        throws ServiceException
+    {
         final List<StorageObject> objectList = new ArrayList<StorageObject>();
-        StorageServiceEventAdaptor adaptor = new StorageServiceEventAdaptor() {
+        StorageServiceEventAdaptor adaptor = new StorageServiceEventAdaptor()
+        {
             @Override
-            public void event(LookupACLEvent event) {
+            public void event(LookupACLEvent event)
+            {
                 super.event(event);
-                if (ServiceEvent.EVENT_IN_PROGRESS == event.getEventCode()) {
+                if (ServiceEvent.EVENT_IN_PROGRESS == event.getEventCode())
+                {
                     objectList.addAll(Arrays.asList(event.getObjectsWithACL()));
                 }
             };
@@ -341,7 +394,7 @@ public class SimpleThreadedStorageService {
         throwError(adaptor);
         return objectList.toArray(new StorageObject[objectList.size()]);
     }
-
+    
     /**
      * Updates/sets Access Control List (ACL) settings for multiple objects.
      *
@@ -353,13 +406,18 @@ public class SimpleThreadedStorageService {
      * objects whose ACL settings were updated/set.
      * @throws ServiceException
      */
-    public StorageObject[] putACLs(String bucketName, final StorageObject[] objects) throws ServiceException {
+    public StorageObject[] putACLs(String bucketName, final StorageObject[] objects)
+        throws ServiceException
+    {
         final List<StorageObject> objectList = new ArrayList<StorageObject>();
-        StorageServiceEventAdaptor adaptor = new StorageServiceEventAdaptor() {
+        StorageServiceEventAdaptor adaptor = new StorageServiceEventAdaptor()
+        {
             @Override
-            public void event(UpdateACLEvent event) {
+            public void event(UpdateACLEvent event)
+            {
                 super.event(event);
-                if (ServiceEvent.EVENT_IN_PROGRESS == event.getEventCode()) {
+                if (ServiceEvent.EVENT_IN_PROGRESS == event.getEventCode())
+                {
                     objectList.addAll(Arrays.asList(event.getObjectsWithUpdatedACL()));
                 }
             };
@@ -368,7 +426,7 @@ public class SimpleThreadedStorageService {
         throwError(adaptor);
         return objectList.toArray(new StorageObject[objectList.size()]);
     }
-
+    
     /**
      * A convenience method to download multiple objects from S3 to pre-existing output streams, which
      * is particularly useful for downloading objects to files.
@@ -380,11 +438,12 @@ public class SimpleThreadedStorageService {
      *
      * @throws ServiceException
      */
-    public void downloadObjects(String bucketName, final DownloadPackage[] downloadPackages) throws ServiceException {
+    public void downloadObjects(String bucketName, final DownloadPackage[] downloadPackages)
+        throws ServiceException
+    {
         StorageServiceEventAdaptor adaptor = new StorageServiceEventAdaptor();
         (new ThreadedStorageService(service, adaptor)).downloadObjects(bucketName, downloadPackages);
         throwError(adaptor);
     }
-
-
+    
 }

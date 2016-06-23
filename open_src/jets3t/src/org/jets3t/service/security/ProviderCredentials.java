@@ -57,6 +57,18 @@ public abstract class ProviderCredentials {
     protected String accessKey = null;
     protected String secretKey = null;
     protected String friendlyName = null;
+    protected String signat = null;
+    protected String region = null;
+
+    public String getRegion()
+    {
+        return region;
+    }
+
+    public void setRegion(String region)
+    {
+        this.region = region;
+    }
 
     /**
      * Construct credentials.
@@ -69,6 +81,16 @@ public abstract class ProviderCredentials {
     public ProviderCredentials(String accessKey, String secretKey) {
         this.accessKey = accessKey;
         this.secretKey = secretKey;
+    }
+
+    public String getSignat()
+    {
+        return signat;
+    }
+
+    public void setSignat(String signat)
+    {
+        this.signat = signat;
     }
 
     /**

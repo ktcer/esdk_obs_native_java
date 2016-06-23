@@ -1,13 +1,18 @@
-/*
- * Copyright Notice:
- *      Copyright  1998-2009, Huawei Technologies Co., Ltd.  ALL Rights Reserved.
- *
- *      Warning: This computer software sourcecode is protected by copyright law
- *      and international treaties. Unauthorized reproduction or distribution
- *      of this sourcecode, or any portion of it, may result in severe civil and
- *      criminal penalties, and will be prosecuted to the maximum extent
- *      possible under the law.
- */
+/**
+* Copyright 2015 Huawei Technologies Co., Ltd. All rights reserved.
+* eSDK is licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*    http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
+
 package com.huawei.obs.services.model;
 
 /**描述多段上传任务初始化请求
@@ -19,6 +24,26 @@ public class InitiateMultipartUploadRequest
     private String objectKey;
     
     private String webSiteRedirectLocation;
+    
+    private AccessControlList acl;
+    
+    /**获取要初始化的多段上传对象的访问控制列表
+     * 
+     * @return 返回访问控制列表
+     */
+    public AccessControlList getAcl()
+    {
+        return acl;
+    }
+    
+    /**设置要初始化的多段上传对象的访问控制列表
+     * 
+     * @param acl 访问控制列表
+     */
+    public void setAcl(AccessControlList acl)
+    {
+        this.acl = acl;
+    }
     
     /**获取要初始化的多段上传任务所属的桶
      * 
@@ -65,7 +90,7 @@ public class InitiateMultipartUploadRequest
     {
         return webSiteRedirectLocation;
     }
-
+    
     /**
      * 当桶设置了Website重定向链接，可以将获取这个对象的请求重定向到桶内另一个对象或一个外部的URL。
      * @param webSiteRedirectLocation  Website重定向链接
@@ -74,5 +99,4 @@ public class InitiateMultipartUploadRequest
     {
         this.webSiteRedirectLocation = webSiteRedirectLocation;
     }
-    
 }

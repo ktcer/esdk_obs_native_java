@@ -1,13 +1,18 @@
-/*
- * Copyright Notice:
- *      Copyright  1998-2015, Huawei Technologies Co., Ltd.  ALL Rights Reserved.
- *
- *      Warning: This computer software sourcecode is protected by copyright law
- *      and international treaties. Unauthorized reproduction or distribution
- *      of this sourcecode, or any portion of it, may result in severe civil and
- *      criminal penalties, and will be prosecuted to the maximum extent
- *      possible under the law.
- */
+/**
+* Copyright 2015 Huawei Technologies Co., Ltd. All rights reserved.
+* eSDK is licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*    http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
+
 package com.huawei.obs.services;
 
 /**OBS配置，记录系统的全局信息
@@ -52,7 +57,7 @@ public class ObsConfiguration
         this.httpsOnly = true;
         this.disableDnsBucket = true;
         this.defaultBucketLocation = ObsConstraint.DEFAULT_BUCKET_LOCATION_VALUE;
-        this.signatString = ObsConstraint.DEFAULT_BUCKET_LOCATION;
+        this.signatString = ObsConstraint.DEFAULT_BUCKET_LOCATION_SIGNA;
     }
     
     /**
@@ -66,8 +71,8 @@ public class ObsConfiguration
 
     /**
      * 获取登陆鉴权的方式
-     * disableDns 鉴权方式: s3或者v4
-     * @return 
+     * 
+     * @param signatString 鉴权方式: s3或者v4
      */
     public void setSignatString(String signatString)
     {

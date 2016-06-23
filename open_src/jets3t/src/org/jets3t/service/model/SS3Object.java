@@ -90,6 +90,9 @@ public class SS3Object extends StorageObject implements Cloneable {
         super(file);
     }
 
+    public SS3Object(File file, long length, long offset) throws NoSuchAlgorithmException, IOException {
+        super(file, length, offset);
+    }
     /**
      * Create an object representing text data. The object is initialized with the given
      * key, the given string as its data content (encoded as UTF-8), a content type of

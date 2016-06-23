@@ -37,7 +37,6 @@ import org.jets3t.service.acl.S3Permission;
 import org.jets3t.service.impl.rest.httpclient.RestS3Service;
 import org.jets3t.service.impl.rest.httpclient.RestStorageService;
 import org.jets3t.service.model.BaseVersionOrDeleteMarker;
-import org.jets3t.service.model.S3LifecycleConfiguration;
 import org.jets3t.service.model.MultipartCompleted;
 import org.jets3t.service.model.MultipartPart;
 import org.jets3t.service.model.MultipleDeleteResult;
@@ -45,13 +44,14 @@ import org.jets3t.service.model.NotificationConfig;
 import org.jets3t.service.model.S3BucketLoggingStatus;
 import org.jets3t.service.model.S3BucketVersioningStatus;
 import org.jets3t.service.model.S3DeleteMarker;
+import org.jets3t.service.model.S3LifecycleConfiguration;
 import org.jets3t.service.model.S3MultipartUpload;
 import org.jets3t.service.model.S3Version;
+import org.jets3t.service.model.S3WebsiteConfiguration;
 import org.jets3t.service.model.SS3Bucket;
 import org.jets3t.service.model.SS3Object;
 import org.jets3t.service.model.StorageBucket;
 import org.jets3t.service.model.StorageObject;
-import org.jets3t.service.model.S3WebsiteConfiguration;
 import org.jets3t.service.model.container.ObjectKeyAndVersion;
 import org.jets3t.service.mx.MxDelegate;
 import org.jets3t.service.security.AWSDevPayCredentials;
@@ -318,46 +318,70 @@ public abstract class S3Service extends RestStorageService implements
                         + RestUtils.encodeUrlString((String) headersMap
                                 .get(Constants.AMZ_SECURITY_TOKEN)) + "&";
             }
-
-            uriPath += "AWSAccessKeyId=" + credentials.getAccessKey();
-            uriPath += "&Expires=" + secondsSinceEpoch;
-
-            // Include Requester Pays header flag, if the flag is included as a
-            // request parameter.
-            if (specialParamName != null
-                    && specialParamName.toLowerCase().indexOf(
-                            Constants.REQUESTER_PAYS_BUCKET_FLAG) >= 0)
-            {
-                String[] requesterPaysHeaderAndValue = Constants.REQUESTER_PAYS_BUCKET_FLAG
-                        .split("=");
-                headersMap.put(requesterPaysHeaderAndValue[0],
-                        requesterPaysHeaderAndValue[1]);
-            }
-
             String serviceEndpointVirtualPath = this.getVirtualPath();
-
-            String canonicalString = RestUtils.makeServiceCanonicalString(
+//            if(null != this.credentials.getSignat()&&"v4".equalsIgnoreCase(this.credentials.getSignat())){
+//                Date now = new Date();
+//                uriPath += "X-Amz-Algorithm=AWS4-HMAC-SHA256";
+//                SimpleDateFormat sdf1 = new SimpleDateFormat("yyyyMMdd");
+//                SimpleDateFormat sdf2 = new SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'");
+//                sdf1.setTimeZone(new SimpleTimeZone(0, "GMT"));
+//                sdf2.setTimeZone(new SimpleTimeZone(0, "GMT"));
+//                String credential = "";
+//                credential += "&X-Amz-Credential=" + credentials.getAccessKey();
+//                credential += "/" + sdf1.format(now);
+//                credential += "/" + credentials.getRegion();
+//                credential += "/"+"s3"+"/"+"aws4_request";
+//                credential += "&X-Amz-Date=" + sdf2.format(now);
+//                credential += "&X-Amz-Expires=" + (secondsSinceEpoch-now.getTime()/1000);
+//                credential += "&X-Amz-SignedHeaders="+"host";
+//                
+//                String encodedCanonical = RestUtils.encodeUrlString(credential).replaceAll("%26", "&").replaceAll("%3D", "=");
+//                uriPath += encodedCanonical;
+//                V4Authentication.setContent_sha256("UNSIGNED-PAYLOAD");
+//                String canonicalString = V4Authentication.makeServiceCanonicalString(method, headersMap, uriPath, credentials);
+//                System.err.println("uriPath : " + uriPath);
+//                String signature = canonicalString.substring(canonicalString.lastIndexOf("Signature="), canonicalString.length());
+//                uriPath += "&X-Amz-" + signature ;
+//                V4Authentication.setContent_sha256(null);
+//            }else{
+                uriPath += "AWSAccessKeyId=" + credentials.getAccessKey();
+                uriPath += "&Expires=" + secondsSinceEpoch;
+                
+                // Include Requester Pays header flag, if the flag is included as a
+                // request parameter.
+                if (specialParamName != null
+                    && specialParamName.toLowerCase().indexOf(
+                        Constants.REQUESTER_PAYS_BUCKET_FLAG) >= 0)
+                {
+                    String[] requesterPaysHeaderAndValue = Constants.REQUESTER_PAYS_BUCKET_FLAG
+                    .split("=");
+                    headersMap.put(requesterPaysHeaderAndValue[0],
+                        requesterPaysHeaderAndValue[1]);
+                }
+                
+                String canonicalString = RestUtils.makeServiceCanonicalString(
                     method, serviceEndpointVirtualPath + "/"
-                            + virtualBucketPath + uriPath,
-                    renameMetadataKeys(headersMap),
+                    + virtualBucketPath + uriPath,
+                    headersMap,
                     String.valueOf(secondsSinceEpoch),
                     this.getRestHeaderPrefix(),
                     this.getResourceParameterNames());
-            if (log.isDebugEnabled())
-            {
-                log.debug("Signing canonical string:\n" + canonicalString);
-            }
-
-            String signedCanonical = ServiceUtils.signWithHmacSha1(
+                if (log.isDebugEnabled())
+                {
+                    log.debug("Signing canonical string:\n" + canonicalString);
+                }
+                
+                String signedCanonical = ServiceUtils.signWithHmacSha1(
                     credentials.getSecretKey(), canonicalString);
-            if (signedCanonical == null)
-            {
-                log.warn("signedCanonical is null");
-                return null;
-            }
-            String encodedCanonical = RestUtils
-                    .encodeUrlString(signedCanonical);
-            uriPath += "&Signature=" + encodedCanonical;
+                if (signedCanonical == null)
+                {
+                    log.warn("signedCanonical is null");
+                    return null;
+                }
+                String encodedCanonical = RestUtils
+                .encodeUrlString(signedCanonical);
+                uriPath += "&Signature=" + encodedCanonical;
+//            }
 
             if (isHttps)
             {
@@ -2879,8 +2903,8 @@ public abstract class S3Service extends RestStorageService implements
      * @throws S3ServiceException
      */
     public SS3Object getObject(SS3Bucket bucket, String objectKey,
-            Calendar ifModifiedSince, Calendar ifUnmodifiedSince,
             String[] ifMatchTags, String[] ifNoneMatchTags,
+            Calendar ifModifiedSince, Calendar ifUnmodifiedSince,
             Long byteRangeStart, Long byteRangeEnd) throws S3ServiceException
     {
         try
@@ -3470,21 +3494,23 @@ public abstract class S3Service extends RestStorageService implements
      */
     public String getBucketPolicy(String bucketName) throws S3ServiceException
     {
-        try
-        {
-            return getBucketPolicyImpl(bucketName);
-        }
-        catch (S3ServiceException e)
-        {
-            if (e.getResponseCode() == 404)
-            {
-                return null;
-            }
-            else
-            {
-                throw e;
-            }
-        }
+        return getBucketPolicyImpl(bucketName);
+//        try
+//        {
+//            return getBucketPolicyImpl(bucketName);
+//        }
+//        catch (S3ServiceException e)
+//        {
+//            
+//            if (e.getResponseCode() == 404)
+//            {
+//                return null;
+//            }
+//            else
+//            {
+//                throw e;
+//            }
+//        }
     }
 
     /**

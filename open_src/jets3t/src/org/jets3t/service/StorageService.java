@@ -31,12 +31,15 @@ import org.apache.commons.logging.LogFactory;
 import org.jets3t.service.acl.S3AccessControlList;
 import org.jets3t.service.impl.rest.XmlResponsesSaxParser;
 import org.jets3t.service.model.DeleteBucket;
+import org.jets3t.service.model.SS3BucketCors;
+import org.jets3t.service.model.S3OptionInfoRequest;
+import org.jets3t.service.model.S3OptionInfoResult;
 import org.jets3t.service.model.S3Quota;
-import org.jets3t.service.model.StorageBucket;
 import org.jets3t.service.model.S3StorageInfo;
+import org.jets3t.service.model.S3StoragePolicy;
+import org.jets3t.service.model.StorageBucket;
 import org.jets3t.service.model.StorageObject;
 import org.jets3t.service.model.StorageOwner;
-import org.jets3t.service.model.S3StoragePolicy;
 import org.jets3t.service.mx.MxDelegate;
 import org.jets3t.service.security.ProviderCredentials;
 import org.jets3t.service.utils.RestUtils;
@@ -61,37 +64,42 @@ import org.jets3t.service.utils.RestUtils;
  * @author James Murty
  * @author Nikolas Coukouma
  */
-public abstract class StorageService {
-
+public abstract class StorageService
+{
+    
     private static final Log log = LogFactory.getLog(StorageService.class);
-
+    
     /**
      * Status code returned by {@link #checkBucketStatus(String)} for a bucket
      * that exists and is owned by the service user.
      */
     public static final int BUCKET_STATUS__MY_BUCKET = 0;
+    
     /**
      * Status code returned by {@link #checkBucketStatus(String)} for a bucket
      * that does not exist.
      */
     public static final int BUCKET_STATUS__DOES_NOT_EXIST = 1;
+    
     /**
      * Status code returned by {@link #checkBucketStatus(String)} for a bucket
      * that exists but is not owned by the service user (i.e. another user has
      * already created this bucket in the service's namespace).
      */
     public static final int BUCKET_STATUS__ALREADY_CLAIMED = 2;
-
+    
     protected Jets3tProperties jets3tProperties = null;
-
+    
     protected ProviderCredentials credentials = null;
-
+    
     private String invokingApplicationDescription = null;
+    
     private boolean isHttpsOnly = true;
+    
     private int internalErrorRetryMax = 5;
-
+    
     private boolean isShutdown = false;
-
+    
     /**
      * The approximate difference in the current time between your computer and
      * a target service, measured in milliseconds.
@@ -102,7 +110,7 @@ public abstract class StorageService {
      * computer based on a response from an AWS server.
      */
     protected long timeOffset = 0;
-
+    
     /**
      * Construct a <code>StorageService</code> identified by the given user credentials.
      *
@@ -120,28 +128,28 @@ public abstract class StorageService {
     {
         this.credentials = credentials;
         this.invokingApplicationDescription = invokingApplicationDescription;
-
+        
         this.jets3tProperties = jets3tProperties;
         this.isHttpsOnly = this.getHttpsOnly();
-        this.internalErrorRetryMax = jets3tProperties.getIntProperty(
-            "storage-service.internal-error-retry-max", 5);
-
+        this.internalErrorRetryMax = jets3tProperties.getIntProperty("storage-service.internal-error-retry-max", 5);
+        
         this.initializeDefaults();
     }
-
-    protected void initializeDefaults() {
+    
+    protected void initializeDefaults()
+    {
         // Configure the InetAddress DNS caching times to work well with remote services. The cached
         // DNS will timeout after 5 minutes, while failed DNS lookups will be retried after 1 second.
         System.setProperty("networkaddress.cache.ttl", "300");
         System.setProperty("networkaddress.cache.negative.ttl", "1");
-
+        
         // (Re)initialize the JetS3t JMX delegate, in case system properties have changed.
         MxDelegate.getInstance().init();
-
+        
         MxDelegate.getInstance().registerS3ServiceMBean();
         MxDelegate.getInstance().registerS3ServiceExceptionMBean();
     }
-
+    
     /**
      * Construct a <code>StorageService</code> identified by the given user credentials.
      *
@@ -157,17 +165,18 @@ public abstract class StorageService {
         this(credentials, invokingApplicationDescription,
             Jets3tProperties.getInstance(Constants.JETS3T_PROPERTIES_FILENAME));
     }
-
+    
     /**
      * Construct a <code>StorageService</code> identified by the given user credentials.
      *
      * @param credentials
      * the user credentials, may be null in which case the communication is done as an anonymous user.
      */
-    protected StorageService(ProviderCredentials credentials) {
+    protected StorageService(ProviderCredentials credentials)
+    {
         this(credentials, null);
     }
-
+    
     /**
      * Make a best-possible effort to shutdown and clean up any resources used by this
      * service such as HTTP connections, connection pools, threads etc, although there is
@@ -177,29 +186,33 @@ public abstract class StorageService {
      * instance must be created to do more work.
      * @throws ServiceException
      */
-    public void shutdown() throws ServiceException {
+    public void shutdown()
+        throws ServiceException
+    {
         this.isShutdown = true;
         this.shutdownImpl();
     }
-
+    
     /**
      * @return true if the {@link #shutdown()} method has been used to shut down and
      * clean up this service. If this function returns true this service instance
      * can no longer be used to do work.
      */
-    public boolean isShutdown() {
+    public boolean isShutdown()
+    {
         return this.isShutdown;
     }
-
+    
     /**
      * @return
      * true if this service has {@link ProviderCredentials} identifying a user, false
      * if the service is acting as an anonymous user.
      */
-    public boolean isAuthenticatedConnection() {
+    public boolean isAuthenticatedConnection()
+    {
         return credentials != null;
     }
-
+    
     /**
      * Whether to use secure HTTPS or insecure HTTP for communicating with a service,
      * as configured in the {@link Jets3tProperties}.
@@ -208,46 +221,50 @@ public abstract class StorageService {
      * true if this service should use only secure HTTPS communication channels.
      * If false, the non-secure HTTP protocol will be used.
      */
-    public boolean isHttpsOnly() {
+    public boolean isHttpsOnly()
+    {
         return isHttpsOnly;
     }
-
+    
     /**
      * @return
      * The maximum number of times to retry when Internal Error (500) errors are encountered,
      * as configured by the {@link Jets3tProperties}.
      */
-    public int getInternalErrorRetryMax() {
+    public int getInternalErrorRetryMax()
+    {
         return internalErrorRetryMax;
     }
-
+    
     /**
      * @return
      * the JetS3t properties that will be used by this service.
      */
-    public Jets3tProperties getJetS3tProperties() {
+    public Jets3tProperties getJetS3tProperties()
+    {
         return jets3tProperties;
     }
-
+    
     /**
      * @return
      * an XML SAX Parser capable of parsing responses from the implemented storage service.
      * @throws ServiceException
      */
-    protected abstract XmlResponsesSaxParser getXmlResponseSaxParser() throws ServiceException;
-
+    protected abstract XmlResponsesSaxParser getXmlResponseSaxParser()
+        throws ServiceException;
+    
     /**
      * @return
      * a service-specific {#link {@link StorageBucket} implementation.
      */
     protected abstract StorageBucket newBucket();
-
+    
     /**
      * @return
      * a service-specific {#link {@link StorageObject} implementation.
      */
     protected abstract StorageObject newObject();
-
+    
     /**
      * Sleeps for a period of time based on the number of Internal Server errors a request has
      * encountered, provided the number of errors does not exceed the value set with the
@@ -277,38 +294,44 @@ public abstract class StorageService {
     protected void sleepOnInternalError(int internalErrorCount)
         throws ServiceException, InterruptedException
     {
-        if (internalErrorCount <= internalErrorRetryMax) {
-            long delayMs = 50L * (int) Math.pow(internalErrorCount, 2);
-            if (log.isWarnEnabled()) {
-                log.warn("Encountered " + internalErrorCount
-                    + " Internal Server error(s), will retry in " + delayMs + "ms");
+        if (internalErrorCount <= internalErrorRetryMax)
+        {
+            long delayMs = 50L * (int)Math.pow(internalErrorCount, 2);
+            if (log.isWarnEnabled())
+            {
+                log.warn("Encountered " + internalErrorCount + " Internal Server error(s), will retry in " + delayMs
+                    + "ms");
             }
             Thread.sleep(delayMs);
-        } else {
-            throw new ServiceException("Encountered too many Internal Server errors ("
-                + internalErrorCount + "), aborting request.");
+        }
+        else
+        {
+            throw new ServiceException("Encountered too many Internal Server errors (" + internalErrorCount
+                + "), aborting request.");
         }
     }
-
+    
     /**
      * @return the credentials identifying the service user, or null for anonymous.
      */
-    public ProviderCredentials getProviderCredentials() {
+    public ProviderCredentials getProviderCredentials()
+    {
         return credentials;
     }
-
+    
     /**
      * @return a description of the application using this service, suitable for inclusion in the
      * user agent string of REST/HTTP requests.
      */
-    public String getInvokingApplicationDescription() {
+    public String getInvokingApplicationDescription()
+    {
         return invokingApplicationDescription;
     }
-
+    
     /////////////////////////////////////////////////////////////////////////////
     // Assertion methods used to sanity-check parameters provided to this service
     /////////////////////////////////////////////////////////////////////////////
-
+    
     /**
      * Throws an exception if this service is anonymous (that is, it was created without
      * an {@link ProviderCredentials} object representing a user account.
@@ -316,14 +339,16 @@ public abstract class StorageService {
      * the action being attempted which this assertion is applied, for debugging purposes.
      * @throws ServiceException
      */
-    protected void assertAuthenticatedConnection(String action) throws ServiceException {
-        if (!isAuthenticatedConnection()) {
-            throw new ServiceException(
-                "The requested action cannot be performed with a non-authenticated service: "
-                    + action);
+    protected void assertAuthenticatedConnection(String action)
+        throws ServiceException
+    {
+        if (!isAuthenticatedConnection())
+        {
+            throw new ServiceException("The requested action cannot be performed with a non-authenticated service: "
+                + action);
         }
     }
-
+    
     /**
      * Throws an exception if a bucket is null or contains a null/empty name.
      * @param bucket
@@ -331,13 +356,16 @@ public abstract class StorageService {
      * the action being attempted which this assertion is applied, for debugging purposes.
      * @throws ServiceException
      */
-    protected void assertValidBucket(StorageBucket bucket, String action) throws ServiceException {
-        if (bucket == null || bucket.getName() == null || bucket.getName().length() == 0) {
-            throw new ServiceException("The action " + action
-                + " cannot be performed with an invalid bucket: " + bucket);
+    protected void assertValidBucket(StorageBucket bucket, String action)
+        throws ServiceException
+    {
+        if (bucket == null || bucket.getName() == null || bucket.getName().length() == 0)
+        {
+            throw new ServiceException("The action " + action + " cannot be performed with an invalid bucket: "
+                + bucket);
         }
     }
-
+    
     /**
      * Throws an exception if an object is null or contains a null/empty key.
      * @param object
@@ -345,13 +373,16 @@ public abstract class StorageService {
      * the action being attempted which this assertion is applied, for debugging purposes.
      * @throws ServiceException
      */
-    protected void assertValidObject(StorageObject object, String action) throws ServiceException {
-        if (object == null || object.getKey() == null || object.getKey().length() == 0) {
-            throw new ServiceException("The action " + action
-                + " cannot be performed with an invalid object: " + object);
+    protected void assertValidObject(StorageObject object, String action)
+        throws ServiceException
+    {
+        if (object == null || object.getKey() == null || object.getKey().length() == 0)
+        {
+            throw new ServiceException("The action " + action + " cannot be performed with an invalid object: "
+                + object);
         }
     }
-
+    
     /**
      * Throws an exception if an object's key name is null or empty.
      * @param key
@@ -360,17 +391,20 @@ public abstract class StorageService {
      * the action being attempted which this assertion is applied, for debugging purposes.
      * @throws ServiceException
      */
-    protected void assertValidObject(String key, String action) throws ServiceException {
-        if (key == null || key.length() == 0) {
+    protected void assertValidObject(String key, String action)
+        throws ServiceException
+    {
+        if (key == null || key.length() == 0)
+        {
             throw new ServiceException("The action " + action
                 + " cannot be performed with an invalid object key name: " + key);
         }
     }
-
+    
     ////////////////////////////////////////////////////////////////
     // Methods below this point perform actions in a storage service
     ////////////////////////////////////////////////////////////////
-
+    
     /**
      * Lists the objects in a bucket.
      * <p>
@@ -388,10 +422,12 @@ public abstract class StorageService {
      * the set of objects contained in a bucket.
      * @throws ServiceException
      */
-    public StorageObject[] listObjects(String bucketName) throws ServiceException {
+    public StorageObject[] listObjects(String bucketName)
+        throws ServiceException
+    {
         return listObjects(bucketName, null, null, Constants.DEFAULT_OBJECT_LIST_CHUNK_SIZE);
     }
-
+    
     /**
      * Lists the objects in a bucket matching a prefix and delimiter.
      * <p>
@@ -426,7 +462,7 @@ public abstract class StorageService {
     {
         return listObjects(bucketName, prefix, delimiter, Constants.DEFAULT_OBJECT_LIST_CHUNK_SIZE);
     }
-
+    
     /**
      * Creates a bucket.
      *
@@ -444,10 +480,12 @@ public abstract class StorageService {
      * the bucket that was created, including only the bucket's name.
      * @throws ServiceException
      */
-    public StorageBucket createBucket(String bucketName) throws ServiceException {
+    public StorageBucket createBucket(String bucketName)
+        throws ServiceException
+    {
         return createBucketImpl(bucketName, null, null);
     }
-
+    
     /**
      * Create a bucket with the Access Control List settings of the bucket object (if any).
      * <p>
@@ -465,11 +503,12 @@ public abstract class StorageService {
      * the bucket that was created, including only the bucket's name.
      * @throws ServiceException
      */
-    public StorageBucket createBucket(StorageBucket bucket) throws ServiceException
+    public StorageBucket createBucket(StorageBucket bucket)
+        throws ServiceException
     {
         return createBucketImpl(bucket.getName(), bucket.getLocation(), bucket.getAcl());
     }
-
+    
     /**
      * Convenience method to check whether an object exists in a bucket.
      *
@@ -485,11 +524,13 @@ public abstract class StorageService {
     public boolean isObjectInBucket(String bucketName, String objectKey)
         throws ServiceException
     {
-        try {
+        try
+        {
             getObjectDetails(bucketName, objectKey);
-        } catch (ServiceException e) {
-            if (404 == e.getResponseCode()
-                || "NoSuchKey".equals(e.getErrorCode())
+        }
+        catch (ServiceException e)
+        {
+            if (404 == e.getResponseCode() || "NoSuchKey".equals(e.getErrorCode())
                 || "NoSuchBucket".equals(e.getErrorCode()))
             {
                 return false;
@@ -504,7 +545,7 @@ public abstract class StorageService {
         }
         return true;
     }
-
+    
     /**
      * Returns an object representing the details and data of an item in a service,
      * without applying any preconditions.
@@ -525,11 +566,12 @@ public abstract class StorageService {
      * the object with the given key, including the object's data input stream.
      * @throws ServiceException
      */
-    public StorageObject getObject(String bucketName, String objectKey) throws ServiceException {
-        return getObject(bucketName, objectKey,
-            null, null, null, null, null, null);
+    public StorageObject getObject(String bucketName, String objectKey)
+        throws ServiceException
+    {
+        return getObject(bucketName, objectKey, null, null, null, null, null, null);
     }
-
+    
     /**
      * Returns an object representing the details of an item in without the object's data, and
      * without applying any preconditions.
@@ -551,13 +593,14 @@ public abstract class StorageService {
     {
         return getObjectDetails(bucketName, objectKey, null, null, null, null);
     }
-
+    
     // add 5015-05-27
-    public StorageObject getObjectDetails(String bucketName, String objectKey,String versionId)
+    public StorageObject getObjectDetails(String bucketName, String objectKey, String versionId)
         throws ServiceException
     {
-        return getObjectDetailsImpl(bucketName, objectKey,null, null, null, null, versionId);
+        return getObjectDetailsImpl(bucketName, objectKey, null, null, null, null, versionId);
     }
+    
     /**
      * Lists the buckets belonging to the service user.
      * <p>
@@ -568,13 +611,15 @@ public abstract class StorageService {
      * the list of buckets owned by the service user.
      * @throws ServiceException
      */
-    public StorageBucket[] listAllBuckets() throws ServiceException {
+    public StorageBucket[] listAllBuckets()
+        throws ServiceException
+    {
         assertAuthenticatedConnection("List all buckets");
         StorageBucket[] buckets = listAllBucketsImpl();
         MxDelegate.getInstance().registerStorageBucketMBeans(buckets);
         return buckets;
     }
-
+    
     /**
      * Returns the owner of an account, using information available in the
      * bucket listing response.
@@ -586,12 +631,14 @@ public abstract class StorageService {
      * the owner of the account.
      * @throws ServiceException
      */
-    public StorageOwner getAccountOwner() throws ServiceException {
+    public StorageOwner getAccountOwner()
+        throws ServiceException
+    {
         assertAuthenticatedConnection("List all buckets to find account owner");
         return getAccountOwnerImpl();
-
+        
     }
-
+    
     /**
      * Lists the objects in a bucket matching a prefix, while instructing the service
      * to send response messages containing no more than a given number of object
@@ -626,15 +673,15 @@ public abstract class StorageService {
      * the set of objects contained in a bucket whose keys start with the given prefix.
      * @throws ServiceException
      */
-    public StorageObject[] listObjects(String bucketName, String prefix, String delimiter,
-        long maxListingLength) throws ServiceException
+    public StorageObject[] listObjects(String bucketName, String prefix, String delimiter, long maxListingLength)
+        throws ServiceException
     {
         MxDelegate.getInstance().registerStorageBucketListEvent(bucketName);
         StorageObject[] objects = listObjectsImpl(bucketName, prefix, delimiter, maxListingLength);
         MxDelegate.getInstance().registerStorageObjectMBean(bucketName, objects);
         return objects;
     }
-
+    
     /**
      * Lists the objects in a bucket matching a prefix, chunking the results into batches of
      * a given size, and returning each chunk separately. It is the responsibility of the caller
@@ -666,15 +713,16 @@ public abstract class StorageService {
      * @throws ServiceException
      */
     public StorageObjectsChunk listObjectsChunked(String bucketName, String prefix, String delimiter,
-        long maxListingLength, String priorLastKey) throws ServiceException
+        long maxListingLength, String priorLastKey)
+        throws ServiceException
     {
         MxDelegate.getInstance().registerStorageBucketListEvent(bucketName);
-        StorageObjectsChunk chunk = listObjectsChunkedImpl(
-            bucketName, prefix, delimiter, maxListingLength, priorLastKey, false);
+        StorageObjectsChunk chunk =
+            listObjectsChunkedImpl(bucketName, prefix, delimiter, maxListingLength, priorLastKey, false);
         MxDelegate.getInstance().registerStorageObjectMBean(bucketName, chunk.getObjects());
         return chunk;
     }
-
+    
     /**
      * Lists the objects in a bucket matching a prefix and also returns the
      * common prefixes. Depending on the value of the completeListing
@@ -710,15 +758,16 @@ public abstract class StorageService {
      * @throws ServiceException
      */
     public StorageObjectsChunk listObjectsChunked(String bucketName, String prefix, String delimiter,
-        long maxListingLength, String priorLastKey, boolean completeListing) throws ServiceException
+        long maxListingLength, String priorLastKey, boolean completeListing)
+        throws ServiceException
     {
         MxDelegate.getInstance().registerStorageBucketListEvent(bucketName);
-        StorageObjectsChunk chunk = listObjectsChunkedImpl(
-            bucketName, prefix, delimiter, maxListingLength, priorLastKey, completeListing);
+        StorageObjectsChunk chunk =
+            listObjectsChunkedImpl(bucketName, prefix, delimiter, maxListingLength, priorLastKey, completeListing);
         MxDelegate.getInstance().registerStorageObjectMBean(bucketName, chunk.getObjects());
         return chunk;
     }
-
+    
     /**
      * Returns a bucket in your account by listing all your buckets
      * (using {@link #listAllBuckets()}), and looking for the named bucket in
@@ -732,19 +781,23 @@ public abstract class StorageService {
      *
      * @throws ServiceException
      */
-    public StorageBucket getBucket(String bucketName) throws ServiceException {
+    public StorageBucket getBucket(String bucketName)
+        throws ServiceException
+    {
         assertAuthenticatedConnection("Get Bucket");
-
+        
         // List existing buckets and return the named bucket if it exists.
         StorageBucket[] existingBuckets = listAllBuckets();
-        for (int i = 0; i < existingBuckets.length; i++) {
-            if (existingBuckets[i].getName().equals(bucketName)) {
+        for (int i = 0; i < existingBuckets.length; i++)
+        {
+            if (existingBuckets[i].getName().equals(bucketName))
+            {
                 return existingBuckets[i];
             }
         }
         return null;
     }
-
+    
     /**
      * Returns a bucket in your account, and creates the bucket if
      * it does not yet exist.
@@ -756,15 +809,18 @@ public abstract class StorageService {
      *
      * @throws ServiceException
      */
-    public StorageBucket getOrCreateBucket(String bucketName) throws ServiceException {
+    public StorageBucket getOrCreateBucket(String bucketName)
+        throws ServiceException
+    {
         StorageBucket bucket = getBucket(bucketName);
-        if (bucket == null) {
+        if (bucket == null)
+        {
             // Bucket does not exist in this user's account, create it.
             bucket = createBucket(bucketName);
         }
         return bucket;
     }
-
+    
     /**
      * Deletes a bucket. Only the owner of a bucket may delete it.
      * <p>
@@ -774,11 +830,13 @@ public abstract class StorageService {
      * the bucket to delete.
      * @throws ServiceException
      */
-    public void deleteBucket(StorageBucket bucket) throws ServiceException {
+    public void deleteBucket(StorageBucket bucket)
+        throws ServiceException
+    {
         assertValidBucket(bucket, "Delete bucket");
         deleteBucketImpl(bucket.getName());
     }
-
+    
     /**
      * Deletes a bucket. Only the owner of a bucket may delete it.
      * <p>
@@ -788,10 +846,12 @@ public abstract class StorageService {
      * the name of the bucket to delete.
      * @throws ServiceException
      */
-    public void deleteBucket(String bucketName) throws ServiceException {
+    public void deleteBucket(String bucketName)
+        throws ServiceException
+    {
         deleteBucketImpl(bucketName);
     }
-
+    
     /**
      * Puts an object inside an existing bucket, creating a new object or overwriting
      * an existing one with the same key. The Access Control List settings of the object
@@ -822,7 +882,7 @@ public abstract class StorageService {
         MxDelegate.getInstance().registerStorageObjectPutEvent(bucketName, object.getKey());
         return putObjectImpl(bucketName, object);
     }
-
+    
     /**
      * Copy an object. You can copy an object within a single bucket or between buckets,
      * and can optionally update the object's metadata at the same time.
@@ -870,21 +930,28 @@ public abstract class StorageService {
      */
     public Map<String, Object> copyObject(String sourceBucketName, String sourceObjectKey,
         String destinationBucketName, StorageObject destinationObject, boolean replaceMetadata,
-        Calendar ifModifiedSince, Calendar ifUnmodifiedSince, String[] ifMatchTags,
-        String[] ifNoneMatchTags) throws ServiceException
+        Calendar ifModifiedSince, Calendar ifUnmodifiedSince, String[] ifMatchTags, String[] ifNoneMatchTags)
+        throws ServiceException
     {
         assertAuthenticatedConnection("copyObject");
-        Map<String, Object> destinationMetadata =
-            replaceMetadata ? destinationObject.getModifiableMetadata() : null;
-
+        Map<String, Object> destinationMetadata = replaceMetadata ? destinationObject.getModifiableMetadata() : null;
+        
         MxDelegate.getInstance().registerStorageObjectCopyEvent(sourceBucketName, sourceObjectKey);
-        return copyObjectImpl(sourceBucketName, sourceObjectKey,
-            destinationBucketName, destinationObject.getKey(),
-            destinationObject.getAcl(), destinationMetadata,
-            ifModifiedSince, ifUnmodifiedSince, ifMatchTags, ifNoneMatchTags, null,
-            destinationObject.getStorageClass(), destinationObject.getServerSideEncryptionAlgorithm());
+        return copyObjectImpl(sourceBucketName,
+            sourceObjectKey,
+            destinationBucketName,
+            destinationObject.getKey(),
+            destinationObject.getAcl(),
+            destinationMetadata,
+            ifModifiedSince,
+            ifUnmodifiedSince,
+            ifMatchTags,
+            ifNoneMatchTags,
+            null,
+            destinationObject.getStorageClass(),
+            destinationObject.getServerSideEncryptionAlgorithm());
     }
-
+    
     /**
      * Copy an object. You can copy an object within a
      * single bucket or between buckets, and can optionally update the object's
@@ -920,13 +987,20 @@ public abstract class StorageService {
      * @throws ServiceException
      */
     public Map<String, Object> copyObject(String sourceBucketName, String sourceObjectKey,
-        String destinationBucketName, StorageObject destinationObject,
-        boolean replaceMetadata) throws ServiceException
+        String destinationBucketName, StorageObject destinationObject, boolean replaceMetadata)
+        throws ServiceException
     {
-        return copyObject(sourceBucketName, sourceObjectKey, destinationBucketName,
-            destinationObject, replaceMetadata, null, null, null, null);
+        return copyObject(sourceBucketName,
+            sourceObjectKey,
+            destinationBucketName,
+            destinationObject,
+            replaceMetadata,
+            null,
+            null,
+            null,
+            null);
     }
-
+    
     /**
      * Move an object. This method works by invoking the
      * {@link #copyObject(String, String, String, StorageObject, boolean)} method to
@@ -969,20 +1043,23 @@ public abstract class StorageService {
      * @throws ServiceException
      */
     public Map<String, Object> moveObject(String sourceBucketName, String sourceObjectKey,
-        String destinationBucketName, StorageObject destinationObject,
-        boolean replaceMetadata) throws ServiceException
+        String destinationBucketName, StorageObject destinationObject, boolean replaceMetadata)
+        throws ServiceException
     {
-        Map<String, Object> copyResult = copyObject(sourceBucketName, sourceObjectKey,
-            destinationBucketName, destinationObject, replaceMetadata);
-
-        try {
+        Map<String, Object> copyResult =
+            copyObject(sourceBucketName, sourceObjectKey, destinationBucketName, destinationObject, replaceMetadata);
+        
+        try
+        {
             deleteObject(sourceBucketName, sourceObjectKey);
-        } catch (Exception e) {
+        }
+        catch (Exception e)
+        {
             copyResult.put("DeleteException", e);
         }
         return copyResult;
     }
-
+    
     /**
      * Rename an object. This method works by invoking the
      * {@link #moveObject(String, String, String, StorageObject, boolean)} method to
@@ -1015,13 +1092,12 @@ public abstract class StorageService {
      *
      * @throws ServiceException
      */
-    public Map<String, Object> renameObject(String bucketName, String sourceObjectKey,
-        StorageObject destinationObject) throws ServiceException
+    public Map<String, Object> renameObject(String bucketName, String sourceObjectKey, StorageObject destinationObject)
+        throws ServiceException
     {
-        return moveObject(bucketName, sourceObjectKey,
-            bucketName, destinationObject, false);
+        return moveObject(bucketName, sourceObjectKey, bucketName, destinationObject, false);
     }
-
+    
     /**
      * Update an object's metadata. This method works by invoking the
      * {@link #copyObject(String, String, String, StorageObject, boolean)} method to
@@ -1046,10 +1122,9 @@ public abstract class StorageService {
     public Map<String, Object> updateObjectMetadata(String bucketName, StorageObject object)
         throws ServiceException
     {
-        return copyObject(bucketName, object.getKey(),
-            bucketName, object, true);
+        return copyObject(bucketName, object.getKey(), bucketName, object, true);
     }
-
+    
     /**
      * Deletes an object from a bucket.
      * <p>
@@ -1062,19 +1137,21 @@ public abstract class StorageService {
      * the key representing the object
      * @throws ServiceException
      */
-    public void deleteObject(String bucketName, String objectKey) throws ServiceException {
+    public void deleteObject(String bucketName, String objectKey)
+        throws ServiceException
+    {
         assertValidObject(objectKey, "deleteObject");
         MxDelegate.getInstance().registerStorageObjectDeleteEvent(bucketName, objectKey);
         deleteObjectImpl(bucketName, objectKey, null, null, null);
     }
     
-    public void deleteObject(String bucketName,String objectKey,String versionId)
+    public void deleteObject(String bucketName, String objectKey, String versionId)
         throws ServiceException
     {
         MxDelegate.getInstance().registerStorageObjectDeleteEvent(bucketName, objectKey);
         deleteObjectImpl(bucketName, objectKey, versionId, null, null);
     }
-
+    
     /**
      * Returns an object representing the details of an item that meets any given preconditions.
      * The object is returned without the object's data.
@@ -1102,15 +1179,20 @@ public abstract class StorageService {
      * input stream)
      * @throws ServiceException
      */
-    public StorageObject getObjectDetails(String bucketName, String objectKey,
-        Calendar ifModifiedSince, Calendar ifUnmodifiedSince, String[] ifMatchTags,
-        String[] ifNoneMatchTags) throws ServiceException
+    public StorageObject getObjectDetails(String bucketName, String objectKey, Calendar ifModifiedSince,
+        Calendar ifUnmodifiedSince, String[] ifMatchTags, String[] ifNoneMatchTags)
+        throws ServiceException
     {
         MxDelegate.getInstance().registerStorageObjectHeadEvent(bucketName, objectKey);
-        return getObjectDetailsImpl(bucketName, objectKey, ifModifiedSince, ifUnmodifiedSince,
-            ifMatchTags, ifNoneMatchTags, null);
+        return getObjectDetailsImpl(bucketName,
+            objectKey,
+            ifModifiedSince,
+            ifUnmodifiedSince,
+            ifMatchTags,
+            ifNoneMatchTags,
+            null);
     }
-
+    
     /**
      * Returns an object representing the details and data of an item that meets any given preconditions.
      * <p>
@@ -1150,14 +1232,22 @@ public abstract class StorageService {
      * @throws ServiceException
      */
     public StorageObject getObject(String bucketName, String objectKey, Calendar ifModifiedSince,
-        Calendar ifUnmodifiedSince, String[] ifMatchTags, String[] ifNoneMatchTags,
-        Long byteRangeStart, Long byteRangeEnd) throws ServiceException
+        Calendar ifUnmodifiedSince, String[] ifMatchTags, String[] ifNoneMatchTags, Long byteRangeStart,
+        Long byteRangeEnd)
+        throws ServiceException
     {
         MxDelegate.getInstance().registerStorageObjectGetEvent(bucketName, objectKey);
-        return getObjectImpl(bucketName, objectKey, ifModifiedSince, ifUnmodifiedSince,
-            ifMatchTags, ifNoneMatchTags, byteRangeStart, byteRangeEnd, null);
+        return getObjectImpl(bucketName,
+            objectKey,
+            ifModifiedSince,
+            ifUnmodifiedSince,
+            ifMatchTags,
+            ifNoneMatchTags,
+            byteRangeStart,
+            byteRangeEnd,
+            null);
     }
-
+    
     /**
      * Applies access control settings to an object. The ACL settings must be included
      * with the object.
@@ -1173,11 +1263,13 @@ public abstract class StorageService {
      * the object with ACL settings that will be applied.
      * @throws ServiceException
      */
-    public void putObjectAcl(String bucketName, StorageObject object) throws ServiceException {
+    public void putObjectAcl(String bucketName, StorageObject object)
+        throws ServiceException
+    {
         assertValidObject(object, "Put Object Access Control List");
         putObjectAcl(bucketName, object.getKey(), object.getAcl());
     }
-
+    
     /**
      * Applies access control settings to an object. The ACL settings must be included
      * with the object.
@@ -1198,9 +1290,9 @@ public abstract class StorageService {
     public void putObjectAcl(String bucketName, String objectKey, S3AccessControlList acl)
         throws ServiceException
     {
-        if (acl == null) {
-            throw new ServiceException("The object '" + objectKey +
-                "' does not include ACL information");
+        if (acl == null)
+        {
+            throw new ServiceException("The object '" + objectKey + "' does not include ACL information");
         }
         putObjectAclImpl(bucketName, objectKey, acl, null);
     }
@@ -1214,16 +1306,28 @@ public abstract class StorageService {
      * @param versionId
      * @throws ServiceException
      */
-    public void putObjectAcl(String bucketName,String objectKey, S3AccessControlList acl,
-        String versionId) throws ServiceException
+    public void putObjectAcl(String bucketName, String objectKey, S3AccessControlList acl, String versionId)
+        throws ServiceException
     {
-        if (acl == null) {
-            throw new ServiceException("The object '" + objectKey +
-                "' does not include ACL information");
+        if (acl == null)
+        {
+            throw new ServiceException("The object '" + objectKey + "' does not include ACL information");
         }
         putObjectAclImpl(bucketName, objectKey, acl, versionId);
     }
-
+    
+    // 20160318
+    public void putObjectAcl(String bucketName, String objectKey, String cannedACL, S3AccessControlList acl,
+        String versionId)
+        throws ServiceException
+    {
+        if (acl == null && null == cannedACL)
+        {
+            throw new ServiceException("The object '" + objectKey + "' does not include ACL information");
+        }
+        putObjectAclImpl(bucketName, objectKey, cannedACL, acl, versionId);
+    }
+    
     /**
      * Retrieves the access control settings of an object.
      *
@@ -1251,8 +1355,8 @@ public abstract class StorageService {
         throws ServiceException
     {
         return getObjectAclImpl(bucketName, objectKey, versionId);
-    } 
-
+    }
+    
     /**
      * Applies access control settings to a bucket. The ACL settings must be included
      * inside the bucket.
@@ -1268,43 +1372,121 @@ public abstract class StorageService {
      * the ACL to apply.
      * @throws ServiceException
      */
-    public void putBucketAcl(String bucketName, S3AccessControlList acl) throws ServiceException {
-        if (acl == null) {
-            throw new ServiceException("The bucket '" + bucketName +
-                "' does not include ACL information");
+    public void putBucketAcl(String bucketName, S3AccessControlList acl)
+        throws ServiceException
+    {
+        if (acl == null)
+        {
+            throw new ServiceException("The bucket '" + bucketName + "' does not include ACL information");
         }
         putBucketAclImpl(bucketName, acl);
     }
     
-    public void putBucketAcl(String bucketName,String cannedACL, S3AccessControlList acl) throws ServiceException {
-//        if (acl == null) {
-//            throw new ServiceException("The bucket '" + bucketName +
-//                "' does not include ACL information");
-//        }cannedACL不能和普通acl同时设置，所以aclxml可能为null
+    public void putBucketAcl(String bucketName, String cannedACL, S3AccessControlList acl)
+        throws ServiceException
+    {
+        //        if (acl == null) {
+        //            throw new ServiceException("The bucket '" + bucketName +
+        //                "' does not include ACL information");
+        //        }cannedACL不能和普通acl同时设置，所以aclxml可能为null
         putBucketAclImpl(bucketName, cannedACL, acl);
     }
     
-    public void putBucketQuota(String bucketName, S3Quota quota) throws ServiceException {
-        if (quota == null) {
-            throw new ServiceException("The bucket '" + bucketName +
-                "' does not include Quota information");
+    public void putBucketQuota(String bucketName, S3Quota quota)
+        throws ServiceException
+    {
+        if (quota == null)
+        {
+            throw new ServiceException("The bucket '" + bucketName + "' does not include Quota information");
         }
         putBucketQuotaImpl(bucketName, quota);
     }
     
-    public void putBucketStoragePolicy(String bucketName, S3StoragePolicy storagePolicy) throws ServiceException {
-        if (storagePolicy == null) {
-            throw new ServiceException("The bucket '" + bucketName +
-                "' does not include StoragePolicy information");
+    public void putBucketCors(String bucketName, SS3BucketCors bucketCors)
+        throws ServiceException
+    {
+        if (bucketName == null || bucketName.equals(""))
+        {
+            throw new ServiceException("the bucket is null");
+        }
+        if (bucketCors == null)
+        {
+            throw new ServiceException("The bucket '" + bucketName + "' does not include Cors information");
+        }
+        
+        putBucketCorsImpl(bucketName, bucketCors);
+    }
+    
+    public SS3BucketCors getBucketCors(String bucketName)
+        throws ServiceException
+    {
+        if (bucketName == null || bucketName.equals(""))
+        {
+            throw new ServiceException("the bucket is null");
+        }
+        return getBucketCorsImpl(bucketName);
+    }
+    
+    public void deleteBucketCors(String bucketName)
+        throws ServiceException
+    {
+        if (bucketName == null || bucketName.equals(""))
+        {
+            throw new ServiceException("the bucket is null");
+        }
+        deleteBucketCorsImpl(bucketName);
+    }
+    
+    public S3OptionInfoResult optionBucket(String bucketName, S3OptionInfoRequest option)
+        throws ServiceException
+    {
+        if (bucketName == null || bucketName.equals(""))
+        {
+            throw new ServiceException("the bucket is null");
+        }
+        if (option == null)
+        {
+            throw new ServiceException("The bucket '" + bucketName + "' does not include options information");
+        }
+        return putOptionsImpl(bucketName, null, option);
+    }
+    
+    public S3OptionInfoResult optionObject(String bucketName, String objectKey, S3OptionInfoRequest option)
+        throws ServiceException
+    {
+        if (bucketName == null || bucketName.equals(""))
+        {
+            throw new ServiceException("the bucket is null");
+        }
+        if (objectKey == null || objectKey.equals(""))
+        {
+            throw new ServiceException("the object key is null");
+        }
+        if (option == null)
+        {
+            throw new ServiceException("The bucket '" + bucketName + "' does not include options information");
+        }
+        return putOptionsImpl(bucketName, objectKey, option);
+    }
+    
+    public void putBucketStoragePolicy(String bucketName, S3StoragePolicy storagePolicy)
+        throws ServiceException
+    {
+        if (storagePolicy == null)
+        {
+            throw new ServiceException("The bucket '" + bucketName + "' does not include StoragePolicy information");
         }
         putBucketStoragePolicyImpl(bucketName, storagePolicy);
     }
     
-    public void deleteBucketWithObjects(String bucketName) throws ServiceException {
+    public void deleteBucketWithObjects(String bucketName)
+        throws ServiceException
+    {
         DeleteBucket deleteBucket = new DeleteBucket();
         deleteBucket.setName(bucketName);
         deleteBucketWithObjectsImpl(bucketName, deleteBucket);
     }
+    
     /**
      * Applies access control settings to a bucket. The ACL settings must be included
      * inside the bucket.
@@ -1318,11 +1500,13 @@ public abstract class StorageService {
      * a bucket with ACL settings to apply.
      * @throws ServiceException
      */
-    public void putBucketAcl(StorageBucket bucket) throws ServiceException {
+    public void putBucketAcl(StorageBucket bucket)
+        throws ServiceException
+    {
         assertValidBucket(bucket, "Put Bucket Access Control List");
         putBucketAcl(bucket.getName(), bucket.getAcl());
     }
-
+    
     /**
      * Retrieves the access control settings of a bucket.
      *
@@ -1337,21 +1521,30 @@ public abstract class StorageService {
      * the ACL settings of the bucket.
      * @throws ServiceException
      */
-    public S3AccessControlList getBucketAcl(String bucketName) throws ServiceException {
+    public S3AccessControlList getBucketAcl(String bucketName)
+        throws ServiceException
+    {
         return getBucketAclImpl(bucketName);
     }
-
-    public S3StorageInfo getBucketStorageInfo(String bucketName) throws ServiceException {
+    
+    public S3StorageInfo getBucketStorageInfo(String bucketName)
+        throws ServiceException
+    {
         return getBucketStorageInfoImpl(bucketName);
     }
     
-    public S3Quota getBucketQuota(String bucketName) throws ServiceException {
+    public S3Quota getBucketQuota(String bucketName)
+        throws ServiceException
+    {
         return getBucketQuotaImpl(bucketName);
     }
     
-    public S3StoragePolicy getBucketStoragePolicy(String bucketName) throws ServiceException {
+    public S3StoragePolicy getBucketStoragePolicy(String bucketName)
+        throws ServiceException
+    {
         return getBucketStoragePolicyImpl(bucketName);
     }
+    
     /**
      * Returns the current date and time, adjusted according to the time
      * offset between your computer and an AWS server (as set by the
@@ -1361,10 +1554,11 @@ public abstract class StorageService {
      * the current time, or the current time adjusted to match the AWS time
      * if the {@link RestUtils#getAWSTimeAdjustment()} method has been invoked.
      */
-    public Date getCurrentTimeWithOffset() {
+    public Date getCurrentTimeWithOffset()
+    {
         return new Date(System.currentTimeMillis() + timeOffset);
     }
-
+    
     /**
      * Renames metadata property names to be suitable for use as HTTP Headers. This is done
      * by renaming any non-HTTP headers to have the a service-specific prefix and leaving the
@@ -1375,14 +1569,17 @@ public abstract class StorageService {
      * @return
      * a map of metadata property name/value pairs renamed to be suitable for use as HTTP headers.
      */
-    public Map<String, Object> renameMetadataKeys(Map<String, Object> metadata) {
+    public Map<String, Object> renameMetadataKeys(Map<String, Object> metadata)
+    {
         Map<String, Object> convertedMetadata = new HashMap<String, Object>();
         // Add all meta-data headers.
-        if (metadata != null) {
-            for (Map.Entry<String, Object> entry: metadata.entrySet()) {
+        if (metadata != null)
+        {
+            for (Map.Entry<String, Object> entry : metadata.entrySet())
+            {
                 String key = entry.getKey();
                 Object value = entry.getValue();
-
+                
                 if (!RestUtils.HTTP_HEADER_METADATA_NAMES.contains(key.toLowerCase(Locale.getDefault()))
                     && !key.startsWith(this.getRestHeaderPrefix()))
                 {
@@ -1393,11 +1590,11 @@ public abstract class StorageService {
         }
         return convertedMetadata;
     }
-
+    
     // ///////////////////////////////////////////////////////////////////////////////
     // Abstract methods that must be implemented by interface-specific service classes
     // ///////////////////////////////////////////////////////////////////////////////
-
+    
     /**
      * Indicates whether a bucket exists and is accessible to a service user.
      * <p>
@@ -1417,8 +1614,9 @@ public abstract class StorageService {
      * true if the bucket exists and is accessible to the service user, false otherwise.
      * @throws ServiceException
      */
-    public abstract boolean isBucketAccessible(String bucketName) throws ServiceException;
-
+    public abstract boolean isBucketAccessible(String bucketName)
+        throws ServiceException;
+    
     /**
      * Find out the status of a bucket with the given name.
      * <p>
@@ -1449,18 +1647,21 @@ public abstract class StorageService {
      *
      * @throws ServiceException
      */
-    public abstract int checkBucketStatus(String bucketName) throws ServiceException;
-
+    public abstract int checkBucketStatus(String bucketName)
+        throws ServiceException;
+    
     /**
      * @return
      * the buckets in your account.
      *
      * @throws ServiceException
      */
-    protected StorageBucket[] listAllBucketsImpl() throws ServiceException {
-        return this.listAllBucketsImpl(Collections.<String, Object>emptyMap());
+    protected StorageBucket[] listAllBucketsImpl()
+        throws ServiceException
+    {
+        return this.listAllBucketsImpl(Collections.<String, Object> emptyMap());
     }
-
+    
     /**
      * @param headers Additional metadata to send with request
      * @return
@@ -1468,15 +1669,17 @@ public abstract class StorageService {
      *
      * @throws ServiceException
      */
-    protected abstract StorageBucket[] listAllBucketsImpl(Map<String, Object> headers) throws ServiceException;
-
+    protected abstract StorageBucket[] listAllBucketsImpl(Map<String, Object> headers)
+        throws ServiceException;
+    
     /**
      * @return
      * the owner of an account.
      * @throws ServiceException
      */
-    protected abstract StorageOwner getAccountOwnerImpl() throws ServiceException;
-
+    protected abstract StorageOwner getAccountOwnerImpl()
+        throws ServiceException;
+    
     /**
      * Lists objects in a bucket.
      *
@@ -1498,9 +1701,10 @@ public abstract class StorageService {
      *
      * @throws ServiceException
      */
-    protected abstract StorageObject[] listObjectsImpl(String bucketName, String prefix,
-        String delimiter, long maxListingLength) throws ServiceException;
-
+    protected abstract StorageObject[] listObjectsImpl(String bucketName, String prefix, String delimiter,
+        long maxListingLength)
+        throws ServiceException;
+    
     /**
      * Lists objects in a bucket up to the maximum listing length specified.
      *
@@ -1521,10 +1725,10 @@ public abstract class StorageService {
      * @param completeListing
      * @throws ServiceException
      */
-    protected abstract StorageObjectsChunk listObjectsChunkedImpl(String bucketName, String prefix,
-        String delimiter, long maxListingLength, String priorLastKey, boolean completeListing)
+    protected abstract StorageObjectsChunk listObjectsChunkedImpl(String bucketName, String prefix, String delimiter,
+        long maxListingLength, String priorLastKey, boolean completeListing)
         throws ServiceException;
-
+    
     /**
      * Creates a bucket.
      *
@@ -1545,11 +1749,12 @@ public abstract class StorageService {
      * the created bucket object, populated with all metadata made available by the creation operation.
      * @throws ServiceException
      */
-    protected StorageBucket createBucketImpl(String bucketName, String location,
-        S3AccessControlList acl) throws ServiceException {
-        return this.createBucketImpl(bucketName, location, acl, Collections.<String, Object>emptyMap());
+    protected StorageBucket createBucketImpl(String bucketName, String location, S3AccessControlList acl)
+        throws ServiceException
+    {
+        return this.createBucketImpl(bucketName, location, acl, Collections.<String, Object> emptyMap());
     }
-
+    
     /**
      * Creates a bucket.
      *
@@ -1571,13 +1776,16 @@ public abstract class StorageService {
      * the created bucket object, populated with all metadata made available by the creation operation.
      * @throws ServiceException
      */
-    protected abstract StorageBucket createBucketImpl(String bucketName, String location,
-        S3AccessControlList acl, Map<String, Object> headers) throws ServiceException;
-
-    protected abstract void deleteBucketImpl(String bucketName) throws ServiceException;
-
-    protected abstract StorageObject putObjectImpl(String bucketName, StorageObject object) throws ServiceException;
-
+    protected abstract StorageBucket createBucketImpl(String bucketName, String location, S3AccessControlList acl,
+        Map<String, Object> headers)
+        throws ServiceException;
+    
+    protected abstract void deleteBucketImpl(String bucketName)
+        throws ServiceException;
+    
+    protected abstract StorageObject putObjectImpl(String bucketName, StorageObject object)
+        throws ServiceException;
+    
     /**
      * Copy an object within your account. Copies within a single bucket or between
      * buckets, and optionally updates the object's metadata at the same time. An
@@ -1610,67 +1818,96 @@ public abstract class StorageService {
      * @throws ServiceException
      */
     protected abstract Map<String, Object> copyObjectImpl(String sourceBucketName, String sourceObjectKey,
-        String destinationBucketName, String destinationObjectKey,
-        S3AccessControlList acl, Map<String, Object> destinationMetadata,
-        Calendar ifModifiedSince, Calendar ifUnmodifiedSince,
-        String[] ifMatchTags, String[] ifNoneMatchTags, String versionId,
-        String destinationObjectStorageClass, String destinationObjectServerSideEncryptionAlgorithm)
+        String destinationBucketName, String destinationObjectKey, S3AccessControlList acl,
+        Map<String, Object> destinationMetadata, Calendar ifModifiedSince, Calendar ifUnmodifiedSince,
+        String[] ifMatchTags, String[] ifNoneMatchTags, String versionId, String destinationObjectStorageClass,
+        String destinationObjectServerSideEncryptionAlgorithm)
         throws ServiceException;
-
-    protected abstract void deleteObjectImpl(String bucketName, String objectKey,
-        String versionId, String multiFactorSerialNumber, String multiFactorAuthCode)
+    
+    protected abstract void deleteObjectImpl(String bucketName, String objectKey, String versionId,
+        String multiFactorSerialNumber, String multiFactorAuthCode)
         throws ServiceException;
-
+    
     protected abstract StorageObject getObjectDetailsImpl(String bucketName, String objectKey,
-        Calendar ifModifiedSince, Calendar ifUnmodifiedSince, String[] ifMatchTags,
-        String[] ifNoneMatchTags, String versionId) throws ServiceException;
-
+        Calendar ifModifiedSince, Calendar ifUnmodifiedSince, String[] ifMatchTags, String[] ifNoneMatchTags,
+        String versionId)
+        throws ServiceException;
+    
     protected abstract StorageObject getObjectImpl(String bucketName, String objectKey, Calendar ifModifiedSince,
-        Calendar ifUnmodifiedSince, String[] ifMatchTags, String[] ifNoneMatchTags,
-        Long byteRangeStart, Long byteRangeEnd, String versionId) throws ServiceException;
-
+        Calendar ifUnmodifiedSince, String[] ifMatchTags, String[] ifNoneMatchTags, Long byteRangeStart,
+        Long byteRangeEnd, String versionId)
+        throws ServiceException;
+    
     protected abstract void putBucketAclImpl(String bucketName, S3AccessControlList acl)
         throws ServiceException;
     
-    protected abstract void putBucketAclImpl(String bucketName, String cannedACL,S3AccessControlList acl)
+    protected abstract void putBucketAclImpl(String bucketName, String cannedACL, S3AccessControlList acl)
         throws ServiceException;
- 
-    protected abstract void putBucketQuotaImpl(String bucketName, S3Quota quota) throws ServiceException;
-
+    
+    protected abstract void putBucketQuotaImpl(String bucketName, S3Quota quota)
+        throws ServiceException;
+    
+    protected abstract void putBucketCorsImpl(String bucketName, SS3BucketCors bucketCors)
+        throws ServiceException;
+    
+    protected abstract SS3BucketCors getBucketCorsImpl(String bucketName)
+        throws ServiceException;
+    
+    protected abstract void deleteBucketCorsImpl(String bucketName)
+        throws ServiceException;
+    
+    protected abstract S3OptionInfoResult putOptionsImpl(String bucketName, String ObjectName,
+        S3OptionInfoRequest option)
+        throws ServiceException;
+    
     protected abstract void putBucketStoragePolicyImpl(String bucketName, S3StoragePolicy storagePolicy)
         throws ServiceException;
     
     protected abstract void deleteBucketWithObjectsImpl(String bucketName, DeleteBucket deleteBucket)
-    throws ServiceException;
-
-    protected abstract void putObjectAclImpl(String bucketName, String objectKey,
-        S3AccessControlList acl, String versionId) throws ServiceException;
-
-    protected abstract S3AccessControlList getObjectAclImpl(String bucketName, String objectKey,
-        String versionId) throws ServiceException;
-
-    protected abstract S3AccessControlList getBucketAclImpl(String bucketName) throws ServiceException;
-
-    protected abstract S3StorageInfo getBucketStorageInfoImpl(String bucketName) throws ServiceException;
-
-    protected abstract S3Quota getBucketQuotaImpl(String bucketName) throws ServiceException;
-
-    protected abstract S3StoragePolicy getBucketStoragePolicyImpl(String bucketName) throws ServiceException;
-
-    protected abstract void shutdownImpl() throws ServiceException;
-
+        throws ServiceException;
+    
+    protected abstract void putObjectAclImpl(String bucketName, String objectKey, S3AccessControlList acl,
+        String versionId)
+        throws ServiceException;
+    
+    protected abstract void putObjectAclImpl(String bucketName, String objectKey, String cannedACL,
+        S3AccessControlList acl, String versionId)
+        throws ServiceException;
+    
+    protected abstract S3AccessControlList getObjectAclImpl(String bucketName, String objectKey, String versionId)
+        throws ServiceException;
+    
+    protected abstract S3AccessControlList getBucketAclImpl(String bucketName)
+        throws ServiceException;
+    
+    protected abstract S3StorageInfo getBucketStorageInfoImpl(String bucketName)
+        throws ServiceException;
+    
+    protected abstract S3Quota getBucketQuotaImpl(String bucketName)
+        throws ServiceException;
+    
+    protected abstract S3StoragePolicy getBucketStoragePolicyImpl(String bucketName)
+        throws ServiceException;
+    
+    protected abstract void shutdownImpl()
+        throws ServiceException;
+    
     /**
      * @return
      * the URL end-point of the target service.
      */
     public abstract String getEndpoint();
+    
     protected abstract String getVirtualPath();
+    
     protected abstract String getSignatureIdentifier();
+    
     /**
      * @return
      * the REST header prefix used by the target service.
      */
     public abstract String getRestHeaderPrefix();
+    
     /**
      * @return
      * GET parameter names that represent specific resources in the target
@@ -1679,17 +1916,24 @@ public abstract class StorageService {
      * access control list settings.
      */
     public abstract List<String> getResourceParameterNames();
+    
     /**
      * @return
      * the REST header prefix used by the target service to identify
      * metadata information.
      */
     public abstract String getRestMetadataPrefix();
+    
     protected abstract int getHttpPort();
+    
     protected abstract int getHttpsPort();
+    
     protected abstract boolean getHttpsOnly();
+    
     protected abstract boolean getDisableDnsBuckets();
+    
     protected abstract boolean getEnableStorageClasses();
+    
     protected abstract boolean getEnableServerSideEncryption();
-
+    
 }

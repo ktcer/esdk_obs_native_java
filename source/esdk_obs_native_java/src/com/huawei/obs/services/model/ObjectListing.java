@@ -1,13 +1,18 @@
-/*
- * Copyright Notice:
- *      Copyright  1998-2009, Huawei Technologies Co., Ltd.  ALL Rights Reserved.
- *
- *      Warning: This computer software sourcecode is protected by copyright law
- *      and international treaties. Unauthorized reproduction or distribution
- *      of this sourcecode, or any portion of it, may result in severe civil and
- *      criminal penalties, and will be prosecuted to the maximum extent
- *      possible under the law.
- */
+/**
+* Copyright 2015 Huawei Technologies Co., Ltd. All rights reserved.
+* eSDK is licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*    http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
+
 package com.huawei.obs.services.model;
 
 import java.util.ArrayList;
@@ -33,6 +38,26 @@ public class ObjectListing
     
     private String delimiter;
     
+    private String nextMarker;
+    
+    /**
+     * 当truncated为true时，用于标明本次请求列举到的最后一个对象
+     * @return 标志字符串
+     */
+    public String getNextMarker()
+    {
+        return nextMarker;
+    }
+
+    /**
+     * 当truncated为true时，用于标明本次请求列举到的最后一个对象，剩余的对象可以从此标志开始列举
+     * @param nextMarker 标志字符串
+     */
+    public void setNextMarker(String nextMarker)
+    {
+        this.nextMarker = nextMarker;
+    }
+
     /**
      * 返回对象列表
      * @return 对象列表
